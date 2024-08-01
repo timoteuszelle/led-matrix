@@ -6,8 +6,8 @@ import queue
 
 # Internal Dependencies
 from commands import Commands, send_command
-from drawing import make_cpu_grid, draw_to_LEDs
-from monitors import CPUMonitorThread
+from drawing import draw_cpu, draw_memory, draw_battery, draw_borders, draw_to_LEDs
+from monitors import CPUMonitorThread, MemoryMonitorThread, BatteryMonitorThread
 
 # External Dependencies
 try:
@@ -62,21 +62,42 @@ if __name__ == "__main__":
     cpu_monitor = CPUMonitorThread(cpu_queue)
     cpu_monitor.start()
 
+    memory_queue = queue.Queue(2)
+    memory_monitor = MemoryMonitorThread(memory_queue)
+    memory_monitor.start()
+
+    battery_queue = queue.Queue(2)
+    battery_monitor = BatteryMonitorThread(battery_queue)
+    battery_monitor.start()
+
     s = serial.Serial(port, 115200)
 
-    min_background_brightness = 10
-    max_background_brightness = 30
+    min_background_brightness = 8
+    max_background_brightness = 20
     min_foreground_brightness = 30
-    max_foreground_brightness = 120
+    max_foreground_brightness = 110
+
+    last_cpu_values = cpu_queue.get()
+    last_memory_values = memory_queue.get()
+    last_battery_values = battery_queue.get()
 
     while True:
         if not cpu_queue.empty():
-            cpu_values = cpu_queue.get()
-            screen_brightness = sbc.get_brightness()[0]
-            background_value = int(screen_brightness / 100 * (max_background_brightness - min_background_brightness) + min_background_brightness)
-            foreground_value = int(screen_brightness / 100 * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
-            grid = make_cpu_grid(cpu_values, background_value, foreground_value)
-            draw_to_LEDs(s, grid)
+            last_cpu_values = cpu_queue.get()
+        if not memory_queue.empty():
+            last_memory_values = memory_queue.get()
+        if not battery_queue.empty():
+            last_battery_values = battery_queue.get()
+        
+        screen_brightness = sbc.get_brightness()[0]
+        background_value = int(screen_brightness / 100 * (max_background_brightness - min_background_brightness) + min_background_brightness)
+        foreground_value = int(screen_brightness / 100 * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+        grid = np.zeros((9,34), dtype = int)
+        draw_cpu(grid, last_cpu_values, foreground_value)
+        draw_memory(grid, last_memory_values, foreground_value)
+        draw_battery(grid, last_battery_values[0], last_battery_values[1], foreground_value)
+        draw_borders(grid, background_value)
+        draw_to_LEDs(s, grid)
         time.sleep(0.05)
 
 

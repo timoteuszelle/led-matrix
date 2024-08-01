@@ -141,38 +141,61 @@ class MemoryMonitorThread(threading.Thread):
                     self.output_queue.put(avg_memory_usage)
             time.sleep(self.update_interval)
 
+class BatteryMonitorThread(threading.Thread):
+    def __init__(self, output_queue, update_interval = 1):
+        super().__init__()
+        self.daemon = True
+        self.update_interval = update_interval
+        self.output_queue = output_queue
+
+    def run(self):
+        while True:
+            if not self.output_queue.full():
+                battery = psutil.sensors_battery()
+                if battery is not None:
+                    battery_percentage = battery.percent / 100.0
+                    battery_plugged = battery.power_plugged
+                    self.output_queue.put((battery_percentage, battery_plugged))
+            time.sleep(self.update_interval)
 
 if __name__ == "__main__":
     disk_queue = queue.Queue()
     network_queue = queue.Queue()
     cpu_queue = queue.Queue()
     memory_queue = queue.Queue()
+    battery_queue = queue.Queue()
 
     disk_monitor = DiskMonitorThread(disk_queue)
     network_monitor = NetworkMonitorThread(network_queue)
     cpu_monitor = CPUMonitorThread(cpu_queue)
     memory_monitor = MemoryMonitorThread(memory_queue)
+    battery_monitor = BatteryMonitorThread(battery_queue)
 
     disk_monitor.start()
     network_monitor.start()
     cpu_monitor.start()
     memory_monitor.start()
+    battery_monitor.start()
 
     while True:
         if not disk_queue.empty():
             read_percent, write_percent = disk_queue.get()
-            print(f"Disk Usage: Read {read_percent:.2%}, Write {write_percent:.2%}")
+            print(f"Disk: Read {read_percent:.2%}, Write {write_percent:.2%}")
         
         if not network_queue.empty():
             sent_percent, recv_percent = network_queue.get()
-            print(f"Network Usage: Sent {sent_percent:.2%}, Received {recv_percent:.2%}")
+            print(f"Network: Sent {sent_percent:.2%}, Received {recv_percent:.2%}")
 
         if not cpu_queue.empty():
             cpu_percentages = cpu_queue.get()
-            print(f"CPU Usage: {cpu_percentages}")
+            print(f"CPU: {cpu_percentages}")
 
         if not memory_queue.empty():
             memory_usage = memory_queue.get()
-            print(f"Memory Usage: {memory_usage:.2%}")
+            print(f"Memory: {memory_usage:.2%}")
+
+        if not battery_queue.empty():
+            battery_percentage, battery_plugged = battery_queue.get()
+            print(f"Battery: {battery_percentage:.2%}, Plugged: {battery_plugged}")
 
         time.sleep(0.5)
