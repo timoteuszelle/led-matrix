@@ -82,22 +82,25 @@ if __name__ == "__main__":
     last_battery_values = battery_queue.get()
 
     while True:
-        if not cpu_queue.empty():
-            last_cpu_values = cpu_queue.get()
-        if not memory_queue.empty():
-            last_memory_values = memory_queue.get()
-        if not battery_queue.empty():
-            last_battery_values = battery_queue.get()
-        
-        screen_brightness = sbc.get_brightness()[0]
-        background_value = int(screen_brightness / 100 * (max_background_brightness - min_background_brightness) + min_background_brightness)
-        foreground_value = int(screen_brightness / 100 * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
-        grid = np.zeros((9,34), dtype = int)
-        draw_cpu(grid, last_cpu_values, foreground_value)
-        draw_memory(grid, last_memory_values, foreground_value)
-        draw_battery(grid, last_battery_values[0], last_battery_values[1], foreground_value)
-        draw_borders(grid, background_value)
-        draw_to_LEDs(s, grid)
+        try:
+            if not cpu_queue.empty():
+                last_cpu_values = cpu_queue.get()
+            if not memory_queue.empty():
+                last_memory_values = memory_queue.get()
+            if not battery_queue.empty():
+                last_battery_values = battery_queue.get()
+            
+            screen_brightness = sbc.get_brightness()[0]
+            background_value = int(screen_brightness / 100 * (max_background_brightness - min_background_brightness) + min_background_brightness)
+            foreground_value = int(screen_brightness / 100 * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+            grid = np.zeros((9,34), dtype = int)
+            draw_cpu(grid, last_cpu_values, foreground_value)
+            draw_memory(grid, last_memory_values, foreground_value)
+            draw_battery(grid, last_battery_values[0], last_battery_values[1], foreground_value)
+            draw_borders(grid, background_value)
+            draw_to_LEDs(s, grid)
+        except Exception as e:
+            print(f"Error in main loop: {e}")
         time.sleep(0.05)
 
 

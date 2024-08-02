@@ -20,8 +20,9 @@ class DiskMonitorThread(threading.Thread):
 
     def run(self):
         while True:
-            if not self.output_queue.full():
-                disk_io = psutil.disk_io_counters()
+            try:
+                if not self.output_queue.full():
+                    disk_io = psutil.disk_io_counters()
                 read_usage = disk_io.read_bytes
                 write_usage = disk_io.write_bytes
                 self.read_usage_history.append(read_usage)
@@ -43,7 +44,8 @@ class DiskMonitorThread(threading.Thread):
                     read_percent = min(1.0, read_rate / self.highest_read_rate)
                     write_percent = min(1.0, write_rate / self.highest_write_rate)
                     self.output_queue.put((read_percent, write_percent))
-
+            except Exception as e:
+                print(f"Error in DiskMonitorThread: {e}")
             time.sleep(self.update_interval)
 
 class NetworkMonitorThread(threading.Thread):
@@ -61,8 +63,9 @@ class NetworkMonitorThread(threading.Thread):
 
     def run(self):
         while True:
-            if not self.output_queue.full():
-                net_io = psutil.net_io_counters()
+            try:
+                if not self.output_queue.full():
+                    net_io = psutil.net_io_counters()
                 sent_usage = net_io.bytes_sent
                 recv_usage = net_io.bytes_recv
                 self.sent_usage_history.append(sent_usage)
@@ -84,7 +87,8 @@ class NetworkMonitorThread(threading.Thread):
                     sent_percent = min(1.0, sent_rate / self.highest_sent_rate)
                     recv_percent = min(1.0, recv_rate / self.highest_recv_rate)
                     self.output_queue.put((sent_percent, recv_percent))
-
+            except Exception as e:
+                print(f"Error in NetworkMonitorThread: {e}")
             time.sleep(self.update_interval)
 
 class CPUMonitorThread(threading.Thread):
@@ -100,8 +104,9 @@ class CPUMonitorThread(threading.Thread):
 
     def run(self):
         while True:
-            if not self.output_queue.full():
-                cpu_usage = psutil.cpu_percent(percpu=True)
+            try:
+                if not self.output_queue.full():
+                    cpu_usage = psutil.cpu_percent(percpu=True)
                 for i in range(self.cpu_count):
                     useage = 2 * max(cpu_usage[2*i], cpu_usage[2*i+1]) # Combine logical cores
                     if useage > 100:
@@ -115,6 +120,8 @@ class CPUMonitorThread(threading.Thread):
                 if len(self.cpu_usage_history[0]) == self.max_history_size:
                     cpu_percentages = [sum(core_history) / self.max_history_size for core_history in self.cpu_usage_history]
                     self.output_queue.put(cpu_percentages)
+            except Exception as e:
+                print(f"Error in CPUMonitorThread: {e}")
             time.sleep(self.update_interval)
 
 class MemoryMonitorThread(threading.Thread):
@@ -129,8 +136,9 @@ class MemoryMonitorThread(threading.Thread):
 
     def run(self):
         while True:
-            if not self.output_queue.full():
-                memory_usage = psutil.virtual_memory().percent / 100.0
+            try:
+                if not self.output_queue.full():
+                    memory_usage = psutil.virtual_memory().percent / 100.0
                 self.memory_usage_history.append(memory_usage)
                 self.history_times.append(time.time())
                 if len(self.memory_usage_history) > self.max_history_size:
@@ -139,6 +147,8 @@ class MemoryMonitorThread(threading.Thread):
                 if len(self.memory_usage_history) == self.max_history_size:
                     avg_memory_usage = sum(self.memory_usage_history) / self.max_history_size
                     self.output_queue.put(avg_memory_usage)
+            except Exception as e:
+                print(f"Error in MemoryMonitorThread: {e}")
             time.sleep(self.update_interval)
 
 class BatteryMonitorThread(threading.Thread):
@@ -150,12 +160,15 @@ class BatteryMonitorThread(threading.Thread):
 
     def run(self):
         while True:
-            if not self.output_queue.full():
-                battery = psutil.sensors_battery()
-                if battery is not None:
-                    battery_percentage = battery.percent / 100.0
-                    battery_plugged = battery.power_plugged
-                    self.output_queue.put((battery_percentage, battery_plugged))
+            try:
+                if not self.output_queue.full():
+                    battery = psutil.sensors_battery()
+                    if battery is not None:
+                        battery_percentage = battery.percent / 100.0
+                        battery_plugged = battery.power_plugged
+                        self.output_queue.put((battery_percentage, battery_plugged))
+            except Exception as e:
+                print(f"Error in BatteryMonitorThread: {e}")
             time.sleep(self.update_interval)
 
 if __name__ == "__main__":
