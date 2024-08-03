@@ -12,6 +12,7 @@ from monitors import CPUMonitorThread, MemoryMonitorThread, BatteryMonitorThread
 # External Dependencies
 try:
     import serial # pyserial
+    from serial.tools import list_ports
     import numpy as np # This is used in a module and we import it here to fetch it if needed
     import screen_brightness_control as sbc
 except ImportError:
@@ -19,44 +20,27 @@ except ImportError:
     for dependency in ["numpy", "pyserial", "screen-brightness-control"]:
         pip.main(['install', '--user', dependency])
     import serial
+    from serial.tools import list_ports
     import screen_brightness_control as sbc
 
 # print(sbc.get_brightness())
 
-def get_ports():
-        """Returns a list of all available serial ports on the system.
-
-        Raises:
-            EnvironmentError: Will be returned if the platform is not Windows, Linux, Cygwin, or Darwin.
-
-        Returns:
-            [list(str)]: A list of valid serial ports on the system.
-        """
-        if sys.platform.startswith('win'):
-            ports = ['COM%s' % (i+1) for i in range(256)]
-        elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
-            ports = reversed(glob.glob('/dev/ttyUSB*'))
-        elif sys.platform.startswith('darwin'):
-            ports = glob.glob('/dev/tty.*')
-        else:
-            raise EnvironmentError('Unsupported platform')
-
-        result = []
-        for port in ports:
-            try:
-                s = serial.Serial(port)
-                s.close()
-                result.append(port)
-            except (OSError, serial.SerialException):
-                pass
-        return result
+def init_device(location = "1-4.2"):
+    try:
+        # VID = 1234
+        # PID = 5678
+        device_list = list_ports.comports()
+        for device in device_list:
+            if device.location == location:
+                s = serial.Serial(device.device, 115200)
+                return s
+    except Exception as e:
+        print(e)
     
     
 if __name__ == "__main__":
-
-
-    # print(get_ports())
-    port = "COM3"
+    # Left LED Matrix location: "1-4.2"
+    # Right LED Matrix location: "1-3.3"
 
     cpu_queue = queue.Queue(2)
     cpu_monitor = CPUMonitorThread(cpu_queue)
@@ -70,8 +54,6 @@ if __name__ == "__main__":
     battery_monitor = BatteryMonitorThread(battery_queue)
     battery_monitor.start()
 
-    s = serial.Serial(port, 115200)
-
     min_background_brightness = 8
     max_background_brightness = 20
     min_foreground_brightness = 30
@@ -80,6 +62,8 @@ if __name__ == "__main__":
     last_cpu_values = cpu_queue.get()
     last_memory_values = memory_queue.get()
     last_battery_values = battery_queue.get()
+
+    s = init_device()
 
     while True:
         try:
@@ -101,6 +85,8 @@ if __name__ == "__main__":
             draw_to_LEDs(s, grid)
         except Exception as e:
             print(f"Error in main loop: {e}")
+            s = init_device()
+            time.sleep(1.0)
         time.sleep(0.05)
 
 
