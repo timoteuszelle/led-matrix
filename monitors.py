@@ -1,12 +1,11 @@
+# Built In Dependencies
 import time
 import psutil
 import threading
-import time
-import queue
 
 
 class DiskMonitorThread(threading.Thread):
-    def __init__(self, output_queue, hysterisis_time = 5, update_interval = 0.25):
+    def __init__(self, output_queue, hysterisis_time = 3, update_interval = 0.5):
         super().__init__()
         self.daemon = True
         self.read_usage_history = []
@@ -23,6 +22,8 @@ class DiskMonitorThread(threading.Thread):
             try:
                 if not self.output_queue.full():
                     disk_io = psutil.disk_io_counters()
+                else:
+                    print("Disk monitor queue is full")
                 read_usage = disk_io.read_bytes
                 write_usage = disk_io.write_bytes
                 self.read_usage_history.append(read_usage)
@@ -49,7 +50,7 @@ class DiskMonitorThread(threading.Thread):
             time.sleep(self.update_interval)
 
 class NetworkMonitorThread(threading.Thread):
-    def __init__(self, output_queue, hysterisis_time = 5, update_interval = 0.25):
+    def __init__(self, output_queue, hysterisis_time = 3, update_interval = 0.5):
         super().__init__()
         self.daemon = True
         self.sent_usage_history = []
@@ -66,6 +67,8 @@ class NetworkMonitorThread(threading.Thread):
             try:
                 if not self.output_queue.full():
                     net_io = psutil.net_io_counters()
+                else:
+                    print("Network monitor queue is full")
                 sent_usage = net_io.bytes_sent
                 recv_usage = net_io.bytes_recv
                 self.sent_usage_history.append(sent_usage)
@@ -92,7 +95,7 @@ class NetworkMonitorThread(threading.Thread):
             time.sleep(self.update_interval)
 
 class CPUMonitorThread(threading.Thread):
-    def __init__(self, output_queue, hysterisis_time = 5, update_interval = 0.25):
+    def __init__(self, output_queue, hysterisis_time = 3, update_interval = 0.5):
         super().__init__()
         self.daemon = True
         self.cpu_count = psutil.cpu_count() // 2 # 2 logical cores per physical core
@@ -107,6 +110,8 @@ class CPUMonitorThread(threading.Thread):
             try:
                 if not self.output_queue.full():
                     cpu_usage = psutil.cpu_percent(percpu=True)
+                else:
+                    print("CPU monitor queue is full")
                 for i in range(self.cpu_count):
                     useage = 2 * max(cpu_usage[2*i], cpu_usage[2*i+1]) # Combine logical cores
                     if useage > 100:
@@ -125,7 +130,7 @@ class CPUMonitorThread(threading.Thread):
             time.sleep(self.update_interval)
 
 class MemoryMonitorThread(threading.Thread):
-    def __init__(self, output_queue, hysterisis_time = 5, update_interval = 0.25):
+    def __init__(self, output_queue, hysterisis_time = 5, update_interval = 1.0):
         super().__init__()
         self.daemon = True
         self.memory_usage_history = []
@@ -139,6 +144,8 @@ class MemoryMonitorThread(threading.Thread):
             try:
                 if not self.output_queue.full():
                     memory_usage = psutil.virtual_memory().percent / 100.0
+                else:
+                    print("Memory monitor queue is full")
                 self.memory_usage_history.append(memory_usage)
                 self.history_times.append(time.time())
                 if len(self.memory_usage_history) > self.max_history_size:
@@ -167,48 +174,8 @@ class BatteryMonitorThread(threading.Thread):
                         battery_percentage = battery.percent / 100.0
                         battery_plugged = battery.power_plugged
                         self.output_queue.put((battery_percentage, battery_plugged))
+                else:
+                    print("Battery monitor queue is full")
             except Exception as e:
                 print(f"Error in BatteryMonitorThread: {e}")
             time.sleep(self.update_interval)
-
-if __name__ == "__main__":
-    disk_queue = queue.Queue()
-    network_queue = queue.Queue()
-    cpu_queue = queue.Queue()
-    memory_queue = queue.Queue()
-    battery_queue = queue.Queue()
-
-    disk_monitor = DiskMonitorThread(disk_queue)
-    network_monitor = NetworkMonitorThread(network_queue)
-    cpu_monitor = CPUMonitorThread(cpu_queue)
-    memory_monitor = MemoryMonitorThread(memory_queue)
-    battery_monitor = BatteryMonitorThread(battery_queue)
-
-    disk_monitor.start()
-    network_monitor.start()
-    cpu_monitor.start()
-    memory_monitor.start()
-    battery_monitor.start()
-
-    while True:
-        if not disk_queue.empty():
-            read_percent, write_percent = disk_queue.get()
-            print(f"Disk: Read {read_percent:.2%}, Write {write_percent:.2%}")
-        
-        if not network_queue.empty():
-            sent_percent, recv_percent = network_queue.get()
-            print(f"Network: Sent {sent_percent:.2%}, Received {recv_percent:.2%}")
-
-        if not cpu_queue.empty():
-            cpu_percentages = cpu_queue.get()
-            print(f"CPU: {cpu_percentages}")
-
-        if not memory_queue.empty():
-            memory_usage = memory_queue.get()
-            print(f"Memory: {memory_usage:.2%}")
-
-        if not battery_queue.empty():
-            battery_percentage, battery_plugged = battery_queue.get()
-            print(f"Battery: {battery_percentage:.2%}, Plugged: {battery_plugged}")
-
-        time.sleep(0.5)
