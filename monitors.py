@@ -92,9 +92,9 @@ class CPUMonitor:
             cpu_usage = psutil.cpu_percent(percpu=True)
             for i in range(self.cpu_count):
                 useage = 2 * max(cpu_usage[2*i], cpu_usage[2*i+1]) # Combine logical cores
-            if useage > 100:
-                useage = 100
-            self.cpu_usage_history[i].append(useage / 100.0)
+                if useage > 100:
+                    useage = 100
+                self.cpu_usage_history[i].append(useage / 100.0)
             self.history_times.append(time.time())
             if len(self.cpu_usage_history[0]) > self.max_history_size:
                 for i in range(self.cpu_count):
@@ -102,7 +102,7 @@ class CPUMonitor:
                     self.history_times = self.history_times[-self.max_history_size:]
             cpu_percentages = [sum(core_history) / self.max_history_size for core_history in self.cpu_usage_history]
             # Somehow cpu_percentages can have values greater than 1 so we clamp them
-            return [min(1.0, cpu_percentage) for cpu_percentage in cpu_percentages]
+            return cpu_percentages
         except Exception as e:
             print(f"Error in CPUMonitor.get(): {e}")
             return [0] * self.cpu_count
