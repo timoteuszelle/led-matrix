@@ -1,12 +1,15 @@
 # Built In Dependencies
 import time
 import math
+import threading
 
 # Internal Dependencies
 from commands import Commands, send_command
 
 # External Dependencies
 import numpy as np
+import serial # pyserial
+from serial.tools import list_ports
 
 
 # This table represents the 3x3 grid of LEDs to be drawn for each fill ratio
@@ -142,6 +145,7 @@ def draw_borders_left(grid, border_value):
     grid[8, :] = border_value # Right
     grid[:, 33] = border_value # Bottom
 
+
 def draw_borders_right(grid, border_value):
     # Fill in the borders
     # Middle Partition borders
@@ -152,6 +156,7 @@ def draw_borders_right(grid, border_value):
     grid[0, :] = border_value # Left
     grid[8, :] = border_value # Right
     grid[:, 33] = border_value # Bottom
+
 
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True):
     bar_width = 3
@@ -168,8 +173,42 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True)
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
 
+
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):
         params = bytearray([i]) + bytearray(grid[i, :].tolist())
         send_command(s, Commands.StageCol, parameters=params)
     send_command(s, Commands.FlushCols)
+
+
+def init_device(location = "1-4.2"):
+    try:
+        # VID = 1234
+        # PID = 5678
+        device_list = list_ports.comports()
+        for device in device_list:
+            if device.location == location:
+                s = serial.Serial(device.device, 115200)
+                return s
+    except Exception as e:
+        print(e)
+
+
+class DrawingThread(threading.Thread):
+    def __init__(self, serial_port, input_queue):
+        super().__init__()
+        self.daemon = True
+        self.serial_port = init_device(serial_port)
+        self.input_queue = input_queue
+    
+    def run(self):
+        while True:
+            try:
+                grid = self.input_queue.get()
+                draw_to_LEDs(self.serial_port, grid)
+            except Exception as e:
+                print(f"Error in DrawingThread: {e}")
+                del self.serial_port
+                time.sleep(1.0)
+                self.serial_port = init_device(self.serial_port)
+
