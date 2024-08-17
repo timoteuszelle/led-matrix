@@ -187,7 +187,7 @@ def init_device(location = "1-4.2"):
         # PID = 5678
         device_list = list_ports.comports()
         for device in device_list:
-            if device.location == location:
+            if device.location and device.location.startswith(location):
                 s = serial.Serial(device.device, 115200)
                 return s
     except Exception as e:

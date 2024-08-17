@@ -5,14 +5,12 @@ import os
 
 if os.name == 'nt':
     import wmi
-else:
-    raise Exception("This script is not supported on this OS")
 
 class DiskMonitor:
     def __init__(self, hysterisis_time = 20):
-        self.read_usage_history = []
-        self.write_usage_history = []
-        self.history_times = []
+        self.read_usage_history = [0]
+        self.write_usage_history = [0]
+        self.history_times = [0]
         self.highest_read_rate = 0.00001
         self.highest_write_rate = 0.00001
         self.max_history_size = hysterisis_time
@@ -46,9 +44,9 @@ class DiskMonitor:
 
 class NetworkMonitor:
     def __init__(self, hysterisis_time = 20):
-        self.sent_usage_history = []
-        self.recv_usage_history = []
-        self.history_times = []
+        self.sent_usage_history = [0]
+        self.recv_usage_history = [0]
+        self.history_times = [0]
         self.highest_sent_rate = 0.00001
         self.highest_recv_rate = 0.00001
         self.max_history_size = hysterisis_time
@@ -125,6 +123,9 @@ class BatteryMonitor:
 
 def get_monitor_brightness():
     try:
-        return wmi.WMI(namespace='wmi').WmiMonitorBrightness()[0].CurrentBrightness
-    except:
-        return 50
+        if os.name == 'nt':
+            return wmi.WMI(namespace='wmi').WmiMonitorBrightness()[0].CurrentBrightness / 100.0
+        else:
+            return int(open('/sys/class/backlight/amdgpu_bl1/brightness', 'r').read()) / 255.0
+    except Exception as e:
+        return 1.0

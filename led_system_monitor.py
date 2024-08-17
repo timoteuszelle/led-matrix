@@ -51,8 +51,8 @@ if __name__ == "__main__":
     while True:
         try:
             screen_brightness = get_monitor_brightness()
-            background_value = int(screen_brightness / 100 * (max_background_brightness - min_background_brightness) + min_background_brightness)
-            foreground_value = int(screen_brightness / 100 * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+            background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
+            foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
 
             left_start_time = time.time()
             # Draw to left LED Matrix
