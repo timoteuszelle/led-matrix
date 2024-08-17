@@ -117,7 +117,10 @@ class BatteryMonitor:
         battery = psutil.sensors_battery()
         if battery is not None:
             battery_percentage = battery.percent / 100.0
-            battery_plugged = battery.power_plugged
+            if os.name == "nt":
+                battery_plugged = battery.power_plugged
+            else:
+                battery_plugged = int(open('/sys/class/power_supply/BAT1/current_now', 'r').read()) < 100000
             return battery_percentage, battery_plugged
         
 
