@@ -7,18 +7,7 @@ from drawing import draw_cpu, draw_memory, draw_battery, draw_borders_left, draw
 from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, get_monitor_brightness
 
 # External Dependencies
-try:
-    # These are used in later scripts, but imported here to test if missing
-    import serial # pyserial
-    from serial.tools import list_ports
-    import numpy as np
-except ImportError:
-    import pip
-    for dependency in ["numpy", "pyserial"]:
-        pip.main(['install', '--user', dependency])
-    import numpy as np
-
-# print(sbc.get_brightness())
+import numpy as np
     
     
 if __name__ == "__main__":
