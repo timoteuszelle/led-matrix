@@ -78,9 +78,13 @@ if __name__ == "__main__":
             draw_bar(grid, last_network_download, foreground_value, bar_x_offset=5, draw_at_bottom=True) # Download
             draw_borders_right(grid, background_value)
             right_drawing_queue.put(grid)
+        except KeyboardInterrupt:
+            break
         except Exception as e:
             import traceback
             print(f"Error in main loop: {e}")
             traceback.print_exc()
             time.sleep(1.0)
         time.sleep(0.1)
+        
+    print("Exiting")
