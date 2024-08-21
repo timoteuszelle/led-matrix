@@ -195,10 +195,11 @@ def init_device(location = "1-4.2"):
 
 
 class DrawingThread(threading.Thread):
-    def __init__(self, serial_port, input_queue):
+    def __init__(self, port_location, input_queue):
         super().__init__()
         self.daemon = True
-        self.serial_port = init_device(serial_port)
+        self.port_location = port_location
+        self.serial_port = init_device(self.port_location)
         self.input_queue = input_queue
     
     def run(self):
@@ -210,5 +211,5 @@ class DrawingThread(threading.Thread):
                 print(f"Error in DrawingThread: {e}")
                 del self.serial_port
                 time.sleep(1.0)
-                self.serial_port = init_device(self.serial_port)
+                self.serial_port = init_device(self.port_location)
 
