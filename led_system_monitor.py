@@ -15,9 +15,9 @@ if __name__ == "__main__":
     # Right LED Matrix location: "1-3.3"
 
     # Set up monitors and serial for left LED Matrix
-    min_background_brightness = 8
+    min_background_brightness = 12
     max_background_brightness = 35
-    min_foreground_brightness = 30
+    min_foreground_brightness = 24
     max_foreground_brightness = 160
 
     cpu_monitor = CPUMonitor()

@@ -129,6 +129,12 @@ def get_monitor_brightness():
         if os.name == 'nt':
             return wmi.WMI(namespace='wmi').WmiMonitorBrightness()[0].CurrentBrightness / 100.0
         else:
-            return int(open('/sys/class/backlight/amdgpu_bl1/brightness', 'r').read()) / 255.0
+            try: # First try the dGPU brightness
+                return int(open('/sys/class/backlight/amdgpu_bl2/brightness', 'r').read()) / 255.0
+            except: # If that doesn't work, try the iGPU brightness
+                return int(open('/sys/class/backlight/amdgpu_bl1/brightness', 'r').read()) / 255.0
     except Exception as e:
         return 1.0
+
+if __name__ == "__main__":
+    print(get_monitor_brightness())
