@@ -120,7 +120,8 @@ class BatteryMonitor:
             if os.name == "nt":
                 battery_plugged = battery.power_plugged
             else:
-                battery_plugged = int(open('/sys/class/power_supply/BAT1/current_now', 'r').read()) < 100000
+                bat_status = open('/sys/class/power_supply/BAT1/status', 'r').read().strip()
+                battery_plugged = (bat_status == 'Charging')
             return battery_percentage, battery_plugged
         
 
