@@ -121,7 +121,7 @@ class BatteryMonitor:
                 battery_plugged = battery.power_plugged
             else:
                 bat_status = open('/sys/class/power_supply/BAT1/status', 'r').read().strip()
-                battery_plugged = (bat_status == 'Charging')
+                battery_plugged = (bat_status != 'Discharging')
             return battery_percentage, battery_plugged
         
 
