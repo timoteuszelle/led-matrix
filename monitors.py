@@ -2,6 +2,13 @@
 import time
 import psutil
 import os
+from statistics import mean
+
+# Reference for fractional measure of sensor temps (in degrees Celcius)
+TEMP_REF = 120
+
+# Reference for fractional measure of fan speeds (in rpm)
+MAX_FAN_SPEED = 6_000
 
 if os.name == 'nt':
     import wmi
@@ -123,6 +130,28 @@ class BatteryMonitor:
                 bat_status = open('/sys/class/power_supply/BAT1/status', 'r').read().strip()
                 battery_plugged = (bat_status != 'Discharging')
             return battery_percentage, battery_plugged
+        
+class TemperatureMonitor:
+    @staticmethod
+    def get():
+        temps = []
+        sensors = psutil.sensors_temperatures()
+        for _, entries in sensors.items():
+            temps.append(mean([entry.current for entry in entries if entry.current > 0]))
+        # We can handle up to eight temps on the matrix display
+        _temps = list(map(lambda x: x / TEMP_REF, temps))
+        return list(map(lambda x: x / TEMP_REF, temps))[:8]
+    
+class FanSpeedMonitor:
+    @staticmethod
+    def get():
+        fans = psutil.sensors_fans()
+        speeds = []
+        for _, entries in fans.items():
+            for entry in entries:
+                speeds.append(entry.current)
+        # We can handle up to two fan speeds on the matrix display
+        return list(map(lambda x: x / MAX_FAN_SPEED, speeds))[:2]
         
 
 def get_monitor_brightness():

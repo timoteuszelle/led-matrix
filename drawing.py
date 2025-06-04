@@ -99,6 +99,16 @@ def draw_cpu(grid, cpu_values, fill_value):
         row_number = i // 2
         fill_grid = lookup_table[spiral_index(v)]
         grid[1+column_number*4:4+column_number*4, 1+row_number*4:4+row_number*4] = fill_grid * fill_value
+        
+# Takes up 15 rows, 7 columns, starting at 1,1
+def draw_temps(grid, temp_values, fill_value):
+    for i, v in enumerate(temp_values):
+        column_number = i % 2
+        row_number = i // 2
+        idx = spiral_index(v)
+        fill_grid = lookup_table[spiral_index(v)]
+        grid[1+column_number*4:4+column_number*4, 1+row_number*4:4+row_number*4] = fill_grid * fill_value
+
 
 # Takes up 2 rows, 7 columns, starting at 17,1
 def draw_memory(grid, memory_ratio, fill_value):
@@ -156,6 +166,21 @@ def draw_borders_right(grid, border_value):
     grid[0, :] = border_value # Left
     grid[8, :] = border_value # Right
     grid[:, 33] = border_value # Bottom
+    
+def draw_borders_right2(grid, border_value):
+    # Fill in the borders
+    # Vertical partition
+    grid[4, :] = border_value
+    # Temps horizontal partitions
+    grid[:, 4] = border_value
+    grid[:, 8] = border_value
+    grid[:, 12] = border_value
+    grid[:, 16] = border_value
+    # Outer Edge borders
+    grid[:, 0] = border_value # Top
+    grid[0, :] = border_value # Left
+    grid[8, :] = border_value # Right
+    grid[:, 33] = border_value # Bottom
 
 
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True):
@@ -172,7 +197,6 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True)
             grid[bar_x_offset+i,33-pixels_col:33] = bar_value
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
-
 
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):
