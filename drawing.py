@@ -197,6 +197,12 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True)
             grid[bar_x_offset+i,33-pixels_col:33] = bar_value
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
+            
+def draw_ids_left(grid, top_left, bot_left, top_right, bot_right):
+    print(f"{top_left, bot_left, top_right, bot_right}")
+    
+def draw_ids_right(grid, top_left, bot_left, top_right, bot_right):
+    print(f"{top_left, bot_left, top_right, bot_right}")
 
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):
