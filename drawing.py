@@ -11,77 +11,7 @@ import numpy as np
 import serial # pyserial
 from serial.tools import list_ports
 
-
-# This table represents the 3x3 grid of LEDs to be drawn for each fill ratio
-lookup_table = np.array(
-    [
-        [
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]
-        ],
-        [
-            [0, 0, 0],
-            [0, 1, 0],
-            [0, 0, 0]
-        ],
-        [
-            [0, 1, 0],
-            [0, 1, 0],
-            [0, 0, 0]
-        ],
-        [
-            [0, 1, 1],
-            [0, 1, 0],
-            [0, 0, 0]
-        ],
-        [
-            [0, 1, 1],
-            [0, 1, 1],
-            [0, 0, 0]
-        ],
-        [
-            [0, 1, 1],
-            [0, 1, 1],
-            [0, 0, 1]
-        ],
-        [
-            [0, 1, 1],
-            [0, 1, 1],
-            [0, 1, 1]
-        ],
-        [
-            [0, 1, 1],
-            [0, 1, 1],
-            [1, 1, 1]
-        ],
-        [
-            [0, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1]
-        ],
-        [
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1]
-        ]
-    ]
-)
-
-lightning_bolt = np.array( [[0,0,0,0,0,0,0], # 0
-                            [0,0,0,0,0,1,0], # 1
-                            [0,0,0,0,1,1,0], # 2
-                            [0,0,0,1,1,0,0], # 3
-                            [0,0,1,1,1,0,0], # 4
-                            [0,1,1,1,0,0,0], # 5
-                            [0,1,1,1,1,1,0], # 6
-                            [0,0,0,1,1,1,0], # 7
-                            [0,0,1,1,1,0,0], # 8
-                            [0,0,1,1,0,0,0], # 9
-                            [0,1,1,0,0,0,0], #10
-                            [0,1,0,0,0,0,0], #11
-                            [0,0,0,0,0,0,0]],#12
-                            dtype=bool).T 
+from patterns import lightning_bolt, lookup_table, id_cpu, id_mem, id_disk, id_net, id_fan, id_temp
 
 
 # Correct table orientation for visual orientation when drawn
@@ -105,7 +35,6 @@ def draw_temps(grid, temp_values, fill_value):
     for i, v in enumerate(temp_values):
         column_number = i % 2
         row_number = i // 2
-        idx = spiral_index(v)
         fill_grid = lookup_table[spiral_index(v)]
         grid[1+column_number*4:4+column_number*4, 1+row_number*4:4+row_number*4] = fill_grid * fill_value
 
@@ -198,11 +127,25 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True)
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
             
-def draw_ids_left(grid, top_left, bot_left, top_right, bot_right):
-    print(f"{top_left, bot_left, top_right, bot_right}")
+def draw_ids_left(grid, top_left, bot_left, top_right, bot_right, fill_value):
+    if top_left == 'cpu':
+        fill_grid_top = id_cpu
+    if bot_left == 'mem/bat':
+        fill_grid_bot = id_mem
+    grid[:, :17] = fill_grid_top * fill_value
+    grid[:, 17:] = fill_grid_bot * fill_value
     
-def draw_ids_right(grid, top_left, bot_left, top_right, bot_right):
-    print(f"{top_left, bot_left, top_right, bot_right}")
+def draw_ids_right(grid, top_left, bot_left, top_right, bot_right, fill_value):
+    if top_right == 'disk':
+        fill_grid_top = id_disk
+    elif top_right == 'temps':
+        fill_grid_top = id_temp
+    if bot_right == 'network':
+        fill_grid_bot = id_net
+    elif bot_right == 'fans':
+        fill_grid_bot = id_fan
+    grid[:, :17] = fill_grid_top * fill_value
+    grid[:, 17:] = fill_grid_bot * fill_value
 
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):

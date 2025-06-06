@@ -14,14 +14,18 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 
 # External Dependencies
 import numpy as np
+from pynput import keyboard
 from pynput.keyboard import Key, Listener
 
 
 def main(args):    
     # Left LED Matrix location: "1-3.2"
     # Right LED Matrix location: "1-3.3"
-    global key_pressed
-    key_pressed = None
+    global alt_pressed
+    alt_pressed = False
+    global i_pressed
+    i_pressed = False
+    # Number of main loop iterations with key pressed before keypress is recognized
     
     if len(sys.argv) > 1 and sys.argv[1] == 'io':
         show_network_disk_io = True
@@ -56,15 +60,22 @@ def main(args):
     right_drawing_thread.start()
         
     def on_press(key):
-        global key_pressed
+        global alt_pressed
+        global i_pressed
         if type(key).__name__ == 'KeyCode':
-            key_pressed = key.char
-        else:
-            key_pressed = None
+            if key.char == 'i':
+                i_pressed = True
+        elif key == Key.alt:
+            alt_pressed = True
 
     def on_release(key):
-        global key_pressed
-        key_pressed = None
+        global alt_pressed
+        global i_pressed
+        if type(key).__name__ == 'KeyCode':
+            if key.char == 'i':
+                i_pressed = False
+        elif key == Key.alt:
+            alt_pressed = False
         if key == Key.esc:
             # Stop listener
             return False
@@ -77,14 +88,14 @@ def main(args):
                 screen_brightness = get_monitor_brightness()
                 background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
                 foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
-                left_start_time = time.time()
                 grid = np.zeros((9,34), dtype = int)
-                while str(key_pressed) == 'i':
-                    grid = np.zeros((9,34), dtype = int)
-                    draw_ids_left(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right)
+                if i_pressed and alt_pressed:
+                    draw_ids_left(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
                     left_drawing_queue.put(grid)
-                    draw_ids_right(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right)
+                    grid = np.zeros((9,34), dtype = int)
+                    draw_ids_right(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
                     right_drawing_queue.put(grid)
+                    grid = np.zeros((9,34), dtype = int)
                     time.sleep(0.1)
                     continue
 
