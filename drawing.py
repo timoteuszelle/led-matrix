@@ -11,7 +11,7 @@ import numpy as np
 import serial # pyserial
 from serial.tools import list_ports
 
-from patterns import lightning_bolt, lookup_table, id_cpu, id_mem, id_disk, id_net, id_fan, id_temp
+from patterns import lightning_bolt, lookup_table, id_patterns
 
 
 # Correct table orientation for visual orientation when drawn
@@ -110,6 +110,14 @@ def draw_borders_right2(grid, border_value):
     grid[0, :] = border_value # Left
     grid[8, :] = border_value # Right
     grid[:, 33] = border_value # Bottom
+    
+def draw_outline_border(grid, border_value):
+    # Outer Edges and middle partition borders
+    grid[:, 0] = border_value # Top
+    grid[:, 16] = border_value # Middle
+    grid[0, :] = border_value # Left
+    grid[8, :] = border_value # Right
+    grid[:, 33] = border_value # Bottom
 
 
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True):
@@ -128,24 +136,16 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1,draw_at_bottom = True)
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
             
 def draw_ids_left(grid, top_left, bot_left, top_right, bot_right, fill_value):
-    if top_left == 'cpu':
-        fill_grid_top = id_cpu
-    if bot_left == 'mem/bat':
-        fill_grid_bot = id_mem
-    grid[:, :17] = fill_grid_top * fill_value
-    grid[:, 17:] = fill_grid_bot * fill_value
+    fill_grid_top = id_patterns[top_left]
+    fill_grid_bot = id_patterns[bot_left]
+    grid[1:8, 1:16] = fill_grid_top * fill_value
+    grid[1:8, 17:-1] = fill_grid_bot * fill_value
     
 def draw_ids_right(grid, top_left, bot_left, top_right, bot_right, fill_value):
-    if top_right == 'disk':
-        fill_grid_top = id_disk
-    elif top_right == 'temps':
-        fill_grid_top = id_temp
-    if bot_right == 'network':
-        fill_grid_bot = id_net
-    elif bot_right == 'fans':
-        fill_grid_bot = id_fan
-    grid[:, :17] = fill_grid_top * fill_value
-    grid[:, 17:] = fill_grid_bot * fill_value
+    fill_grid_top = id_patterns[top_right]
+    fill_grid_bot = id_patterns[bot_right]
+    grid[1:8, 1:16] = fill_grid_top * fill_value
+    grid[1:8, 17:-1] = fill_grid_bot * fill_value
 
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):

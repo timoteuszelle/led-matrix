@@ -8,7 +8,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 # Internal Dependencies
 from drawing import draw_cpu, draw_memory, draw_battery, draw_temps, draw_borders_left, draw_bar, draw_borders_right, \
-    draw_borders_right2, draw_ids_left, draw_ids_right, DrawingThread
+    draw_borders_right2, draw_outline_border, draw_ids_left, draw_ids_right, DrawingThread
 from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, \
     TemperatureMonitor, FanSpeedMonitor, get_monitor_brightness
 
@@ -21,19 +21,13 @@ from pynput.keyboard import Key, Listener
 def main(args):    
     # Left LED Matrix location: "1-3.2"
     # Right LED Matrix location: "1-3.3"
+    
+    # Track key presses to reveal metrics ID in each panel section
     global alt_pressed
     alt_pressed = False
     global i_pressed
     i_pressed = False
-    # Number of main loop iterations with key pressed before keypress is recognized
     
-    if len(sys.argv) > 1 and sys.argv[1] == 'io':
-        show_network_disk_io = True
-    else:
-        show_network_disk_io = None
-    print(f"Right panel shows {'Disk and Network I/o' if show_network_disk_io is not None else 'Temps and fan speeds'}")
-    
-
     # Set up monitors and serial for left LED Matrix
     min_background_brightness = 12
     max_background_brightness = 35
@@ -90,9 +84,11 @@ def main(args):
                 foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
                 grid = np.zeros((9,34), dtype = int)
                 if i_pressed and alt_pressed:
+                    draw_outline_border(grid, background_value)
                     draw_ids_left(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
                     left_drawing_queue.put(grid)
                     grid = np.zeros((9,34), dtype = int)
+                    draw_outline_border(grid, background_value)
                     draw_ids_right(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
                     right_drawing_queue.put(grid)
                     grid = np.zeros((9,34), dtype = int)
@@ -106,7 +102,7 @@ def main(args):
                 else:
                     print(f"Unrecognized display option for top left matrix: {args.top_left}")
                     
-                if args.bottom_left == 'mem/bat': 
+                if args.bottom_left == 'mem-bat': 
                     last_memory_values = memory_monitor.get()
                     last_battery_values = battery_monitor.get()
                     draw_memory(grid, last_memory_values, foreground_value)
@@ -123,19 +119,19 @@ def main(args):
                     draw_bar(grid, last_disk_read, foreground_value, bar_x_offset=1, draw_at_bottom=False) # Read
                     draw_bar(grid, last_disk_write, foreground_value, bar_x_offset=5, draw_at_bottom=False) # Write
                     draw_borders_right(grid, background_value)
-                elif args.top_right == 'temps':
+                elif args.top_right == 'temp':
                     temp_values = temperature_monitor.get()
                     draw_temps(grid, temp_values, foreground_value)
                     draw_borders_right2(grid, background_value)
                 else:
                     print("Unrecognized display option for top right matrix: {args.top_right}")
                     
-                if args.bottom_right == 'network':
+                if args.bottom_right == 'net':
                     last_network_upload, last_network_download = network_monitor.get()
                     draw_bar(grid, last_network_upload, foreground_value, bar_x_offset=1, draw_at_bottom=True) # Upload
                     draw_bar(grid, last_network_download, foreground_value, bar_x_offset=5, draw_at_bottom=True) # Download
                     
-                elif args.bottom_right == 'fans':
+                elif args.bottom_right == 'fan':
                     fan_speeds = fan_speed_monitor.get()
                     draw_bar(grid, fan_speeds[0], foreground_value, bar_x_offset=1, draw_at_bottom=True)
                     draw_bar(grid, fan_speeds[1], foreground_value, bar_x_offset=5, draw_at_bottom=True)
@@ -163,14 +159,14 @@ if __name__ == "__main__":
                          help="Show this help message and exit")
     
     addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("-tl", "--top-left", type=str, default="cpu", metavar="No additoinal options available yet",
-                         help="Metrics to display in the top section of the left matrix device")
-    addGroup.add_argument("-bl", "--bottom-left", type=str, default="mem/bat", metavar="No additional options available yet",
-                         help="Metrics to display in the bottom section of the left matrix device")
-    addGroup.add_argument("-tr", "--top-right", type=str, default="disk", metavar="disk | temps",
-                         help="Metrics to display in the top section of the right matrix device")
-    addGroup.add_argument("-br", "--bottom-right", type=str, default="network", metavar="network | fans",
-                         help="Metrics to display in the bottom section of the right matrix device")
+    addGroup.add_argument("-tl", "--top-left", type=str, default="cpu", choices=["cpu"],
+                         help="Metrics to display in the top section of the left matrix panel")
+    addGroup.add_argument("-bl", "--bottom-left", type=str, default="mem-bat", choices=["mem-bat"],
+                         help="Metrics to display in the bottom section of the left matrix panel")
+    addGroup.add_argument("-tr", "--top-right", type=str, default="disk", choices=["disk", "temp"],
+                         help="Metrics to display in the top section of the right matrix panel")
+    addGroup.add_argument("-br", "--bottom-right", type=str, default="net", choices=["net", "fan"],
+                         help="Metrics to display in the bottom section of the right matrix panel")
     
     args = parser.parse_args()
     print(f"top left {args.top_left}")
