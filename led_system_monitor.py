@@ -4,11 +4,12 @@ import queue
 import sys
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+import serial
+from serial.tools import list_ports
 
 
 # Internal Dependencies
-from drawing import draw_cpu, draw_memory, draw_battery, draw_temps, draw_borders_left, draw_bar, draw_borders_right, \
-    draw_borders_right2, draw_outline_border, draw_ids_left, draw_ids_right, DrawingThread
+from drawing import draw_outline_border, draw_ids_left, draw_ids_right, draw_app, draw_app_border, DrawingThread
 from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, \
     TemperatureMonitor, FanSpeedMonitor, get_monitor_brightness
 
@@ -16,11 +17,30 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 import numpy as np
 from pynput import keyboard
 from pynput.keyboard import Key, Listener
+import evdev
+
+def discover_led_devices():
+    locations = []
+    try:
+        device_list = list_ports.comports()
+        for device in device_list:
+            if 'LED Matrix Input Module' in str(device):
+                locations.append((device.location, device.device))
+        return sorted(locations, key = lambda x: x[0])
+    except Exception as e:
+        print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
+        
+device = evdev.InputDevice('/dev/input/event7')
+        
 
 
 def main(args):    
-    # Left LED Matrix location: "1-3.2"
-    # Right LED Matrix location: "1-3.3"
+    led_devices = discover_led_devices()
+    if not len(led_devices):
+        print("No LED devices found")
+        sys.exit(0)
+    print(f"Found LED devices: Left: {led_devices[0][1]}, Right: {led_devices[1][1]}")
+    locations = list(map(lambda x: x[0], led_devices))
     
     # Track key presses to reveal metrics ID in each panel section
     global alt_pressed
@@ -28,7 +48,7 @@ def main(args):
     global i_pressed
     i_pressed = False
     
-    # Set up monitors and serial for left LED Matrix
+    # Set up monitors and brightness parameters
     min_background_brightness = 12
     max_background_brightness = 35
     min_foreground_brightness = 24
@@ -39,19 +59,57 @@ def main(args):
     battery_monitor = BatteryMonitor()
     temperature_monitor = TemperatureMonitor()
     fan_speed_monitor = FanSpeedMonitor()
-
-    left_drawing_queue = queue.Queue(2)
-    left_drawing_thread = DrawingThread("1-3.2", left_drawing_queue)
-    left_drawing_thread.start()
-
-
-    # Set up monitors and serial for right LED Matrix
     disk_monitor = DiskMonitor()
     network_monitor = NetworkMonitor()
 
+    # Setuop left panel drawing queue
+    left_drawing_queue = queue.Queue(2)
+    left_drawing_thread = DrawingThread(locations[0], left_drawing_queue)
+    left_drawing_thread.start()    
+
+    # Setup right panel drawing queue
     right_drawing_queue = queue.Queue(2)
-    right_drawing_thread = DrawingThread("1-3.3", right_drawing_queue)
+    right_drawing_thread = DrawingThread(locations[1], right_drawing_queue)
     right_drawing_thread.start()
+    
+    def draw_cpu(arg, grid, foreground_value, idx):
+        last_cpu_values = cpu_monitor.get()
+        draw_app(arg, grid, last_cpu_values, foreground_value, idx)
+        
+    def draw_mem_bat(arg, grid, foreground_value, idx):
+        last_memory_values = memory_monitor.get()
+        last_battery_values = battery_monitor.get()
+        draw_app("mem", grid, last_memory_values, foreground_value, idx)
+        draw_app("bat", grid, last_battery_values[0], last_battery_values[1], foreground_value, idx+3)
+        
+    def draw_disk(arg, grid, foreground_value, idx):
+        last_disk_read, last_disk_write = disk_monitor.get()
+        draw_app(arg, grid, last_disk_read, foreground_value, bar_x_offset=1, y=idx) # Read
+        draw_app(arg, grid, last_disk_write, foreground_value, bar_x_offset=5, y=idx) # Write
+        
+    def draw_net(arg, grid, foreground_value, idx):
+        last_network_upload, last_network_download = network_monitor.get()
+        draw_app(arg, grid, last_network_upload, foreground_value, bar_x_offset=1, y=idx)
+        draw_app(arg, grid, last_network_download, foreground_value, bar_x_offset=5, y=idx)
+        
+    def draw_temps(arg, grid, foreground_value, idx):
+        temp_values = temperature_monitor.get()
+        draw_app(arg, grid, temp_values, foreground_value, idx)
+        
+    def draw_fans(arg, grid, foreground_value, idx):
+        fan_speeds = fan_speed_monitor.get()
+        draw_app(arg, grid, fan_speeds[0], foreground_value, bar_x_offset=1, y=idx)
+        draw_app(arg, grid, fan_speeds[1], foreground_value, bar_x_offset=5, y=idx)
+    
+        
+    app_functions = {
+        "cpu": draw_cpu,
+        "temp": draw_temps,
+        "mem-bat": draw_mem_bat,
+        "fan": draw_fans,
+        "disk": draw_disk,
+        "net": draw_net
+    }
         
     def on_press(key):
         global alt_pressed
@@ -73,72 +131,54 @@ def main(args):
         if key == Key.esc:
             # Stop listener
             return False
-
+        
     with Listener(
         on_press=on_press,
-        on_release=on_release) as listener:
+        on_release=on_release):
         while True:
             try:
+                keys = device.active_keys(verbose=True)
+                print(keys)
                 screen_brightness = get_monitor_brightness()
                 background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
                 foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
                 grid = np.zeros((9,34), dtype = int)
                 if i_pressed and alt_pressed:
                     draw_outline_border(grid, background_value)
-                    draw_ids_left(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
+                    draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
                     left_drawing_queue.put(grid)
                     grid = np.zeros((9,34), dtype = int)
                     draw_outline_border(grid, background_value)
-                    draw_ids_right(grid, args.top_left, args.bottom_left, args.top_right, args.bottom_right, foreground_value)
+                    draw_ids_right(grid, args.top_right, args.bottom_right, foreground_value)
                     right_drawing_queue.put(grid)
                     grid = np.zeros((9,34), dtype = int)
                     time.sleep(0.1)
                     continue
 
-                # Draw to left LED Matrix
-                if args.top_left == 'cpu': 
-                    last_cpu_values = cpu_monitor.get()
-                    draw_cpu(grid, last_cpu_values, foreground_value)
-                else:
-                    print(f"Unrecognized display option for top left matrix: {args.top_left}")
+                # Draw by quadrants (i.e. to top and bottom of left and right panels)
+                for i, draw_queue in enumerate([left_drawing_queue, right_drawing_queue]):
+                    if i == 0:
+                        panel = 'left'
+                        _args = [args.top_left, args.bottom_left]
+                    else:
+                        panel = 'right'
+                        _args = [args.top_right, args.bottom_right]
+                    grid = np.zeros((9,34), dtype = int)
+                    for j, arg in enumerate(_args):
+                        if j == 0:
+                            idx = 1
+                            loc = 'top'
+                        else:
+                            idx = 17
+                            loc = 'bottom'
+                        try:
+                            app_functions[arg](arg, grid, foreground_value, idx)
+                        except KeyError:
+                            print(f"Unrecognized display option {arg} for {loc} {panel}")
+                        if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
+                        draw_app_border(arg, grid, background_value, idx)
+                    draw_queue.put(grid)
                     
-                if args.bottom_left == 'mem-bat': 
-                    last_memory_values = memory_monitor.get()
-                    last_battery_values = battery_monitor.get()
-                    draw_memory(grid, last_memory_values, foreground_value)
-                    draw_battery(grid, last_battery_values[0], last_battery_values[1], foreground_value)
-                else:
-                    print("Unrecognized display option for bottom left matrix: {args.bottom_left}")
-                draw_borders_left(grid, background_value)
-                left_drawing_queue.put(grid)
-                
-                # Draw to right LED Matrix
-                grid = np.zeros((9,34), dtype = int)
-                if args.top_right == 'disk':
-                    last_disk_read, last_disk_write = disk_monitor.get()
-                    draw_bar(grid, last_disk_read, foreground_value, bar_x_offset=1, draw_at_bottom=False) # Read
-                    draw_bar(grid, last_disk_write, foreground_value, bar_x_offset=5, draw_at_bottom=False) # Write
-                    draw_borders_right(grid, background_value)
-                elif args.top_right == 'temp':
-                    temp_values = temperature_monitor.get()
-                    draw_temps(grid, temp_values, foreground_value)
-                    draw_borders_right2(grid, background_value)
-                else:
-                    print("Unrecognized display option for top right matrix: {args.top_right}")
-                    
-                if args.bottom_right == 'net':
-                    last_network_upload, last_network_download = network_monitor.get()
-                    draw_bar(grid, last_network_upload, foreground_value, bar_x_offset=1, draw_at_bottom=True) # Upload
-                    draw_bar(grid, last_network_download, foreground_value, bar_x_offset=5, draw_at_bottom=True) # Download
-                    
-                elif args.bottom_right == 'fan':
-                    fan_speeds = fan_speed_monitor.get()
-                    draw_bar(grid, fan_speeds[0], foreground_value, bar_x_offset=1, draw_at_bottom=True)
-                    draw_bar(grid, fan_speeds[1], foreground_value, bar_x_offset=5, draw_at_bottom=True)
-                else:
-                    print("Unrecognized display option for bottom right matrix: {args.bottom_right}")
-                
-                right_drawing_queue.put(grid)
             except KeyboardInterrupt:
                 break
             except Exception as e:
@@ -159,13 +199,13 @@ if __name__ == "__main__":
                          help="Show this help message and exit")
     
     addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("-tl", "--top-left", type=str, default="cpu", choices=["cpu"],
+    addGroup.add_argument("-tl", "--top-left", type=str, default="cpu", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the top section of the left matrix panel")
-    addGroup.add_argument("-bl", "--bottom-left", type=str, default="mem-bat", choices=["mem-bat"],
+    addGroup.add_argument("-bl", "--bottom-left", type=str, default="mem-bat", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the bottom section of the left matrix panel")
-    addGroup.add_argument("-tr", "--top-right", type=str, default="disk", choices=["disk", "temp"],
+    addGroup.add_argument("-tr", "--top-right", type=str, default="disk", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("-br", "--bottom-right", type=str, default="net", choices=["net", "fan"],
+    addGroup.add_argument("-br", "--bottom-right", type=str, default="net", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the bottom section of the right matrix panel")
     
     args = parser.parse_args()
