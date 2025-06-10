@@ -4,7 +4,6 @@ import queue
 import sys
 import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-import serial
 from serial.tools import list_ports
 
 
@@ -15,9 +14,10 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 
 # External Dependencies
 import numpy as np
-from pynput import keyboard
-from pynput.keyboard import Key, Listener
 import evdev
+
+KEY_I = ('KEY_I', 23)
+MODIFIER_KEYS = [('KEY_RIGHTALT', 100), ('KEY_LEFTALT', 56)]
 
 def discover_led_devices():
     locations = []
@@ -111,84 +111,60 @@ def main(args):
         "net": draw_net
     }
         
-    def on_press(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
-                i_pressed = True
-        elif key == Key.alt:
-            alt_pressed = True
-
-    def on_release(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
-                i_pressed = False
-        elif key == Key.alt:
-            alt_pressed = False
-        if key == Key.esc:
-            # Stop listener
-            return False
-        
-    with Listener(
-        on_press=on_press,
-        on_release=on_release):
-        while True:
-            try:
-                keys = device.active_keys(verbose=True)
-                print(keys)
-                screen_brightness = get_monitor_brightness()
-                background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
-                foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+    while True:
+        try:
+            screen_brightness = get_monitor_brightness()
+            background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
+            foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+            grid = np.zeros((9,34), dtype = int)
+            active_keys = device.active_keys(verbose=True)
+            # if i_pressed and alt_pressed:
+            if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys:
+                draw_outline_border(grid, background_value)
+                draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
+                left_drawing_queue.put(grid)
                 grid = np.zeros((9,34), dtype = int)
-                if i_pressed and alt_pressed:
-                    draw_outline_border(grid, background_value)
-                    draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
-                    left_drawing_queue.put(grid)
-                    grid = np.zeros((9,34), dtype = int)
-                    draw_outline_border(grid, background_value)
-                    draw_ids_right(grid, args.top_right, args.bottom_right, foreground_value)
-                    right_drawing_queue.put(grid)
-                    grid = np.zeros((9,34), dtype = int)
-                    time.sleep(0.1)
-                    continue
+                draw_outline_border(grid, background_value)
+                draw_ids_right(grid, args.top_right, args.bottom_right, foreground_value)
+                right_drawing_queue.put(grid)
+                grid = np.zeros((9,34), dtype = int)
+                time.sleep(0.1)
+                continue
 
-                # Draw by quadrants (i.e. to top and bottom of left and right panels)
-                for i, draw_queue in enumerate([left_drawing_queue, right_drawing_queue]):
-                    if i == 0:
-                        panel = 'left'
-                        _args = [args.top_left, args.bottom_left]
+            # Draw by quadrants (i.e. to top and bottom of left and right panels)
+            for i, draw_queue in enumerate([left_drawing_queue, right_drawing_queue]):
+                if i == 0:
+                    panel = 'left'
+                    _args = [args.top_left, args.bottom_left]
+                else:
+                    panel = 'right'
+                    _args = [args.top_right, args.bottom_right]
+                grid = np.zeros((9,34), dtype = int)
+                for j, arg in enumerate(_args):
+                    if j == 0:
+                        idx = 1
+                        loc = 'top'
                     else:
-                        panel = 'right'
-                        _args = [args.top_right, args.bottom_right]
-                    grid = np.zeros((9,34), dtype = int)
-                    for j, arg in enumerate(_args):
-                        if j == 0:
-                            idx = 1
-                            loc = 'top'
-                        else:
-                            idx = 17
-                            loc = 'bottom'
-                        try:
-                            app_functions[arg](arg, grid, foreground_value, idx)
-                        except KeyError:
-                            print(f"Unrecognized display option {arg} for {loc} {panel}")
-                        if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
-                        draw_app_border(arg, grid, background_value, idx)
-                    draw_queue.put(grid)
-                    
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                import traceback
-                print(f"Error in main loop: {e}")
-                traceback.print_exc()
-                time.sleep(1.0)
-            time.sleep(0.1)
-            
-        print("Exiting")
+                        idx = 17
+                        loc = 'bottom'
+                    try:
+                        app_functions[arg](arg, grid, foreground_value, idx)
+                    except KeyError:
+                        print(f"Unrecognized display option {arg} for {loc} {panel}")
+                    if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
+                    draw_app_border(arg, grid, background_value, idx)
+                draw_queue.put(grid)
+                
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            import traceback
+            print(f"Error in main loop: {e}")
+            traceback.print_exc()
+            time.sleep(1.0)
+        time.sleep(0.1)
+        
+    print("Exiting")
         
 if __name__ == "__main__":
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
