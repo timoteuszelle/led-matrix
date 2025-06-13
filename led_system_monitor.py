@@ -2,7 +2,7 @@
 import time
 import queue
 import sys
-import os
+import re
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from serial.tools import list_ports
 
@@ -26,7 +26,9 @@ def discover_led_devices():
         for device in device_list:
             if 'LED Matrix Input Module' in str(device):
                 locations.append((device.location, device.device))
-        return sorted(locations, key = lambda x: x[0])
+        #location is of form: <bus>-<port>[-<port>]… port is of form x.y:n.m
+        # Sort by y:n.m to get the devices in left-right order
+        return sorted(locations, key = lambda x: re.sub('^\d+\-\d+\.', '', x[0]))
     except Exception as e:
         print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
         
@@ -39,7 +41,7 @@ def main(args):
     if not len(led_devices):
         print("No LED devices found")
         sys.exit(0)
-    print(f"Found LED devices: Left: {led_devices[0][1]}, Right: {led_devices[1][1]}")
+    print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
     
     # Track key presses to reveal metrics ID in each panel section
@@ -118,7 +120,6 @@ def main(args):
             foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
             grid = np.zeros((9,34), dtype = int)
             active_keys = device.active_keys(verbose=True)
-            # if i_pressed and alt_pressed:
             if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys:
                 draw_outline_border(grid, background_value)
                 draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
