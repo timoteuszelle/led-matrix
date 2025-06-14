@@ -120,7 +120,7 @@ def main(args):
             foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
             grid = np.zeros((9,34), dtype = int)
             active_keys = device.active_keys(verbose=True)
-            if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys:
+            if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys and not args.no_key_listener:
                 draw_outline_border(grid, background_value)
                 draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
                 left_drawing_queue.put(grid)
@@ -172,23 +172,25 @@ if __name__ == "__main__":
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
                             formatter_class=ArgumentDefaultsHelpFormatter)
     mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("-h", "--help", action="help",
+    mode_group.add_argument("--help", "-h", action="help",
                          help="Show this help message and exit")
     
     addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("-tl", "--top-left", type=str, default="cpu", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the top section of the left matrix panel")
-    addGroup.add_argument("-bl", "--bottom-left", type=str, default="mem-bat", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the bottom section of the left matrix panel")
-    addGroup.add_argument("-tr", "--top-right", type=str, default="disk", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("-br", "--bottom-right", type=str, default="net", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--bottom-right", "-br", type=str, default="net", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
                          help="Metrics to display in the bottom section of the right matrix panel")
+    addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
     
     args = parser.parse_args()
     print(f"top left {args.top_left}")
     print(f"bottom left {args.bottom_left}")
     print(f"top right {args.top_right}")
     print(f"bottom right {args.bottom_right}")
+    if args.no_key_listener: print("Key listener disabled")
     
     main(args)
