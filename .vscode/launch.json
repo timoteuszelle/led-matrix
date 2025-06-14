@@ -8,11 +8,12 @@
         
         {
             "name": "Python: Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "args": ["-tr", "temp", "-br", "fan"]
         }
     ]
 }

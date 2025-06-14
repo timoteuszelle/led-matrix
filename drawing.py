@@ -2,17 +2,19 @@
 import time
 import math
 import threading
+import importlib.util
+import sys
+import os
+import re
 
 # Internal Dependencies
 from commands import Commands, send_command
+from patterns import lightning_bolt, lookup_table, id_patterns
 
 # External Dependencies
 import numpy as np
 import serial # pyserial
 from serial.tools import list_ports
-
-from patterns import lightning_bolt, lookup_table, id_patterns
-
 
 # Correct table orientation for visual orientation when drawn
 for i in range(lookup_table.shape[0]):
@@ -131,15 +133,7 @@ metrics_funcs = {
         "fn": draw_spiral_vals,
         "border": draw_8_x_8_grid
     },
-    "temp": {
-        "fn": draw_spiral_vals,
-        "border": draw_8_x_8_grid
-    },
     "disk": {
-        "fn": draw_bar,
-        "border": draw_2_x_1_horiz_grid
-    },
-    "fan": {
         "fn": draw_bar,
         "border": draw_2_x_1_horiz_grid
     },
@@ -160,7 +154,7 @@ metrics_funcs = {
 # Draws the app for the specified arg value
 def draw_app(app, *arguments, **kwargs):
     metrics_funcs[app].get('fn')(*arguments, **kwargs)
-
+    
 # Draws the border for the specified arg value
 def draw_app_border(app, *arguments):
     metrics_funcs[app].get('border')(*arguments)
@@ -186,7 +180,7 @@ def draw_to_LEDs(s, grid):
     send_command(s, Commands.FlushCols)
 
 
-def init_device(location = "1-4.2"):
+def init_device(location = "1-3.2"):
     try:
         # VID = 1234
         # PID = 5678
@@ -217,4 +211,24 @@ class DrawingThread(threading.Thread):
                 del self.serial_port
                 time.sleep(1.0)
                 self.serial_port = init_device(self.port_location)
+                
+###############################################################
+###           Load metrics functions from plugins           ###
+###############################################################
+# Keep this at the end of the module to avoid circular imports
+if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
+    plugins_dir = './plugins/'
+    for file in os.listdir(plugins_dir):
+        if file.endswith('_plugin.py'):
+            module_name = re.sub(file, "_plugin.py", "")
+            file_path = plugins_dir + file
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
 
+            plugin_metrics_funcs = getattr(module,'metrics_funcs')
+
+            for k,v in plugin_metrics_funcs.items():
+                    metrics_funcs[k] = v
+################################################################

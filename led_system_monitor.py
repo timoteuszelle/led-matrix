@@ -4,7 +4,9 @@ import queue
 import sys
 import re
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from serial.tools import list_ports
+import importlib.util
+import sys
+import os
 
 
 # Internal Dependencies
@@ -15,6 +17,8 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 # External Dependencies
 import numpy as np
 import evdev
+from serial.tools import list_ports
+
 
 KEY_I = ('KEY_I', 23)
 MODIFIER_KEYS = [('KEY_RIGHTALT', 100), ('KEY_LEFTALT', 56)]
@@ -34,8 +38,6 @@ def discover_led_devices():
         
 device = evdev.InputDevice('/dev/input/event7')
         
-
-
 def main(args):    
     led_devices = discover_led_devices()
     if not len(led_devices):
@@ -94,25 +96,33 @@ def main(args):
         draw_app(arg, grid, last_network_upload, foreground_value, bar_x_offset=1, y=idx)
         draw_app(arg, grid, last_network_download, foreground_value, bar_x_offset=5, y=idx)
         
-    def draw_temps(arg, grid, foreground_value, idx):
-        temp_values = temperature_monitor.get()
-        draw_app(arg, grid, temp_values, foreground_value, idx)
-        
-    def draw_fans(arg, grid, foreground_value, idx):
-        fan_speeds = fan_speed_monitor.get()
-        draw_app(arg, grid, fan_speeds[0], foreground_value, bar_x_offset=1, y=idx)
-        draw_app(arg, grid, fan_speeds[1], foreground_value, bar_x_offset=5, y=idx)
-    
-        
     app_functions = {
         "cpu": draw_cpu,
-        "temp": draw_temps,
+        # "temp": draw_temps,
         "mem-bat": draw_mem_bat,
-        "fan": draw_fans,
+        # "fan": draw_fans,
         "disk": draw_disk,
         "net": draw_net
     }
         
+    #################################################
+        ###      Load app functions from plugins      ###
+    if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
+        plugins_dir = './plugins/'
+        for file in os.listdir(plugins_dir):
+            if file.endswith('_plugin.py'):
+                module_name = re.sub(file, "_plugin.py", "")
+                file_path = plugins_dir + file
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+
+                plugin_app_funcs = module.app_funcs
+                for obj in plugin_app_funcs:
+                    app_functions[obj["name"]] = obj["fn"]
+    #################################################
+    
     while True:
         try:
             screen_brightness = get_monitor_brightness()
@@ -149,8 +159,10 @@ def main(args):
                         idx = 17
                         loc = 'bottom'
                     try:
-                        app_functions[arg](arg, grid, foreground_value, idx)
+                        func = app_functions[arg]
+                        func(arg, grid, foreground_value, idx)
                     except KeyError:
+                        print(app_functions.keys())
                         print(f"Unrecognized display option {arg} for {loc} {panel}")
                     if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
                     draw_app_border(arg, grid, background_value, idx)
@@ -168,6 +180,23 @@ def main(args):
     print("Exiting")
         
 if __name__ == "__main__":
+    app_names = ["cpu", "net", "disk", "mem-bat"]
+    ###############################################################
+    ###  Load additional app names from plugins for arg parser  ###
+    if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
+        plugins_dir = './plugins/'
+        for file in os.listdir(plugins_dir):
+            if file.endswith('_plugin.py'):
+                module_name = re.sub(file, "_plugin.py", "")
+                file_path = plugins_dir + file
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+
+                plugin_app_names = module.metrics_funcs.keys()
+                app_names += plugin_app_names
+    #################################################################
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
                             formatter_class=ArgumentDefaultsHelpFormatter)
@@ -176,15 +205,17 @@ if __name__ == "__main__":
                          help="Show this help message and exit")
     
     addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=app_names,
                          help="Metrics to display in the top section of the left matrix panel")
-    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=app_names,
                          help="Metrics to display in the bottom section of the left matrix panel")
-    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
+    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=app_names,
                          help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("--bottom-right", "-br", type=str, default="net", choices=["cpu", "net","fan", "temp", "disk", "mem-bat"],
-                         help="Metrics to display in the bottom section of the right matrix panel")
+    addGroup.add_argument("--bottom-right", "-br", type=str, default="disk", choices=app_names,
+                         help="Metrics to display in the top section of the right matrix panel")
+    
     addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
+    addGroup.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
     
     args = parser.parse_args()
     print(f"top left {args.top_left}")
