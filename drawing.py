@@ -40,29 +40,38 @@ def draw_memory(grid, memory_ratio, fill_value, y):
     lit_pixels = 7 * 2 * memory_ratio
     pixels_bottom = int(round(lit_pixels / 2))
     pixels_top = int(round((lit_pixels - 0.49) / 2))
-    grid[1:y+pixels_top,y] = fill_value
-    grid[1:1+pixels_bottom,y+1] = fill_value
+    grid[1:1+pixels_top,y+1] = fill_value
+    grid[1:1+pixels_bottom,y+2] = fill_value
 
 # Takes up 13 rows, 7 columns, starting at y,1
 def draw_battery(grid, battery_ratio, battery_plugged, fill_value, y,
         battery_low_thresh = 0.07,battery_low_flash_time = 2, charging_pulse_time = 3):
-    # lit_pixels = int(round(13 * 7 * battery_ratio))
-    # pixels_base = lit_pixels // 7
-    # remainder = lit_pixels % 7
-    # if battery_ratio <= battery_low_thresh and not battery_plugged:
-    #     if time.time() % battery_low_flash_time * 2 < battery_low_flash_time: # This will flash the battery indicator if too low
-    #         return
-    # for i in range(7):
-    #     pixels_col = pixels_base
-    #     if i < remainder:
-    #         pixels_col += 1
-    #     grid[i+1,y+12-pixels_col:y+12] = fill_value
-    # if battery_plugged:
-    #     pulse_amount = math.sin(time.time() / charging_pulse_time)
-    #     grid[1:8,y-1:y+12][lightning_bolt] -= np.rint(fill_value + 10 * pulse_amount).astype(int)
-    #     indices = grid[1:8,y-1:y+12] < 0
-    #     grid[1:8,y-1:y+12][indices] = -grid[1:8,y-1:y+12][indices]
-    pass
+    if y == 19:
+        bot = 33
+        num_rows = 13
+        bat_top = 20
+        bat_bot = 33
+    else:
+        bot = 16
+        num_rows = 12
+        bat_top = 3
+        bat_bot = 16
+    lit_pixels = int(round(num_rows * 7 * battery_ratio))
+    pixels_base = lit_pixels // 7
+    remainder = lit_pixels % 7
+    if battery_ratio <= battery_low_thresh and not battery_plugged:
+        if time.time() % battery_low_flash_time * 2 < battery_low_flash_time: # This will flash the battery indicator if too low
+            return
+    for i in range(7):
+        pixels_col = pixels_base
+        if i < remainder:
+            pixels_col += 1
+        grid[i+1,bot-pixels_col:bot] = fill_value
+    if battery_plugged:
+        pulse_amount = math.sin(time.time() / charging_pulse_time)
+        grid[1:8,bat_top:bat_bot][lightning_bolt] -= np.rint(fill_value + 10 * pulse_amount).astype(int)
+        indices = grid[1:8,bat_top:bat_bot] < 0
+        grid[1:8,bat_top:bat_bot][indices] = -grid[1:8,bat_top:bat_bot][indices]
     
 # Takes up 13 rows, 3 columns, starting at y,1
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
