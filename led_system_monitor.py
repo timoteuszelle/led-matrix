@@ -153,10 +153,10 @@ def main(args):
                 grid = np.zeros((9,34), dtype = int)
                 for j, arg in enumerate(_args):
                     if j == 0:
-                        idx = 1
+                        idx = 0
                         loc = 'top'
                     else:
-                        idx = 17
+                        idx = 16
                         loc = 'bottom'
                     try:
                         func = app_functions[arg]

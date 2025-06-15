@@ -28,6 +28,7 @@ def spiral_index(fill_ratio):
 
 # Takes up 15 rows, 7 columns, starting at y,1
 def draw_spiral_vals(grid, cpu_values, fill_value, y):
+    y += 1
     for i, v in enumerate(cpu_values):
         column_number = i % 2
         row_number = i // 2
@@ -45,22 +46,23 @@ def draw_memory(grid, memory_ratio, fill_value, y):
 # Takes up 13 rows, 7 columns, starting at y,1
 def draw_battery(grid, battery_ratio, battery_plugged, fill_value, y,
         battery_low_thresh = 0.07,battery_low_flash_time = 2, charging_pulse_time = 3):
-    lit_pixels = int(round(13 * 7 * battery_ratio))
-    pixels_base = lit_pixels // 7
-    remainder = lit_pixels % 7
-    if battery_ratio <= battery_low_thresh and not battery_plugged:
-        if time.time() % battery_low_flash_time * 2 < battery_low_flash_time: # This will flash the battery indicator if too low
-            return
-    for i in range(7):
-        pixels_col = pixels_base
-        if i < remainder:
-            pixels_col += 1
-        grid[i+1,y+12-pixels_col:y+12] = fill_value
-    if battery_plugged:
-        pulse_amount = math.sin(time.time() / charging_pulse_time)
-        grid[1:8,y-1:y+12][lightning_bolt] -= np.rint(fill_value + 10 * pulse_amount).astype(int)
-        indices = grid[1:8,y-1:y+12] < 0
-        grid[1:8,y-1:y+12][indices] = -grid[1:8,y-1:y+12][indices]
+    # lit_pixels = int(round(13 * 7 * battery_ratio))
+    # pixels_base = lit_pixels // 7
+    # remainder = lit_pixels % 7
+    # if battery_ratio <= battery_low_thresh and not battery_plugged:
+    #     if time.time() % battery_low_flash_time * 2 < battery_low_flash_time: # This will flash the battery indicator if too low
+    #         return
+    # for i in range(7):
+    #     pixels_col = pixels_base
+    #     if i < remainder:
+    #         pixels_col += 1
+    #     grid[i+1,y+12-pixels_col:y+12] = fill_value
+    # if battery_plugged:
+    #     pulse_amount = math.sin(time.time() / charging_pulse_time)
+    #     grid[1:8,y-1:y+12][lightning_bolt] -= np.rint(fill_value + 10 * pulse_amount).astype(int)
+    #     indices = grid[1:8,y-1:y+12] < 0
+    #     grid[1:8,y-1:y+12][indices] = -grid[1:8,y-1:y+12][indices]
+    pass
     
 # Takes up 13 rows, 3 columns, starting at y,1
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
@@ -73,7 +75,7 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
         pixels_col = pixels_base
         if i < remainder:
             pixels_col += 1
-        if y == 17:
+        if y == 16:
             grid[bar_x_offset+i,33-pixels_col:33] = bar_value
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
@@ -83,13 +85,13 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
 # Draws a border around a 17 x 9 grid, either at the top
 # or bottom of the panel, divided into a 2 x 4 grid
 def draw_8_x_8_grid(grid, border_value, y):
-    # y = 17 if draw_at_bottom else 0
+    height = 16 if y == 0 else 17
     grid[:, y] = border_value # Top
-    grid[:, y+16] = border_value # Bottom
+    grid[:, y+height] = border_value # Bottom
     
-    grid[0, y:y+17] = border_value # Left
-    grid[8, y:y+17] = border_value # Right
-    grid[4, y:y+17] = border_value # Middle
+    grid[0, y:y+height] = border_value # Left
+    grid[8, y:y+height] = border_value # Right
+    grid[4, y:y+height] = border_value # Middle
     
     # Horizontal grid borders
     grid[:, y+4] = border_value
@@ -99,24 +101,25 @@ def draw_8_x_8_grid(grid, border_value, y):
 # Draws a border around a 17 x 9 grid, split horizontally
 # into two sections at the specified column
 def draw_2_x_1_horiz_grid(grid, border_value, y, x=4):
-    # y = 17 if draw_at_bottom else 0
+    height = 16 if y == 0 else 17
+    top = y if y == 0 else y+1
     grid[:, y] = border_value # Top
-    grid[:, y+16] = border_value # Bottom
+    grid[:, y+height] = border_value # Bottom
 
-    grid[0, y:y+17] = border_value # Left
-    grid[8, y:y+17] = border_value # Right
-    grid[x, y:y+17] = border_value # Middle
+    grid[0, y:y+height] = border_value # Left
+    grid[8, y:y+height] = border_value # Right
+    grid[x, y:y+height] = border_value # Middle
     
 # Draws a border around a 17 x 9 grid, split vertically
 # into two sections at the specified row
-def draw_1_x_2_vert_grid(grid, border_value, y, y_split=4):
-    # y = 17 if draw_at_bottom else 0
+def draw_1_x_2_vert_grid(grid, border_value, y, split_idx = 3):
+    height = 16 if y == 0 else 17
     grid[:, y] = border_value # Top
-    grid[:, y+16] = border_value # Bottom
-    grid[:, y+y_split] = border_value # Middle
+    grid[:, y+height] = border_value # Bottom
+    grid[:, y+split_idx] = border_value # Middle
 
-    grid[0, y:y+17] = border_value # Left
-    grid[8, y:y+17] = border_value # Right
+    grid[0, y:y+height] = border_value # Left
+    grid[8, y:y+height] = border_value # Right
     
 # Draws a border around the entire panel, split
 # vertically into equal segments

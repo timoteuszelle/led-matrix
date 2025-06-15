@@ -13,7 +13,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["-tr", "temp", "-br", "fan"]
+            "args": ["-tr", "mem-bat"]
         }
     ]
 }
