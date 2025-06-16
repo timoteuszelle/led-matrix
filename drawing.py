@@ -75,7 +75,7 @@ def draw_battery(grid, battery_ratio, battery_plugged, fill_value, y,
         grid[1:8,bat_top:bat_bot][indices] = -grid[1:8,bat_top:bat_bot][indices]
     
 # Takes up 16 (top segment) or 17 (bottom segment) rows, 3 columns, starting at y,1
-def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
+def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=0):
     bar_width = 3
     bar_height = 16
     lit_pixels = int(round(bar_height * bar_width * bar_ratio))
