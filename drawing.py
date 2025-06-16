@@ -9,7 +9,7 @@ import re
 
 # Internal Dependencies
 from commands import Commands, send_command
-from patterns import lightning_bolt, lookup_table, id_patterns
+from patterns import lightning_bolt_bot, lightning_bolt_top, lookup_table, id_patterns
 
 # External Dependencies
 import numpy as np
@@ -27,6 +27,7 @@ def spiral_index(fill_ratio):
 ## App Draw Functions ##
 
 # Takes up 15 rows, 7 columns, starting at y,1
+# For bottom segment, the 16th row will be empty
 def draw_spiral_vals(grid, cpu_values, fill_value, y):
     y += 1
     for i, v in enumerate(cpu_values):
@@ -43,19 +44,19 @@ def draw_memory(grid, memory_ratio, fill_value, y):
     grid[1:1+pixels_top,y+1] = fill_value
     grid[1:1+pixels_bottom,y+2] = fill_value
 
-# Takes up 13 rows, 7 columns, starting at y,1
+# Takes up 12 (top segment) or 13 (bottom segment) rows, 7 columns, starting at y,1
 def draw_battery(grid, battery_ratio, battery_plugged, fill_value, y,
-        battery_low_thresh = 0.07,battery_low_flash_time = 2, charging_pulse_time = 3):
-    if y == 19:
+        battery_low_thresh = 0.07, battery_low_flash_time = 2, charging_pulse_time = 3):
+    if y == 19: # Placement on bottom
         bot = 33
         num_rows = 13
-        bat_top = 20
-        bat_bot = 33
-    else:
+        lightning_bolt = lightning_bolt_bot
+    else: # Placement on top (y == 3)
         bot = 16
         num_rows = 12
-        bat_top = 3
-        bat_bot = 16
+        lightning_bolt = lightning_bolt_top
+    bat_top = y + 1
+    bat_bot = bat_top + num_rows
     lit_pixels = int(round(num_rows * 7 * battery_ratio))
     pixels_base = lit_pixels // 7
     remainder = lit_pixels % 7
@@ -73,7 +74,7 @@ def draw_battery(grid, battery_ratio, battery_plugged, fill_value, y,
         indices = grid[1:8,bat_top:bat_bot] < 0
         grid[1:8,bat_top:bat_bot][indices] = -grid[1:8,bat_top:bat_bot][indices]
     
-# Takes up 13 rows, 3 columns, starting at y,1
+# Takes up 16 (top segment) or 17 (bottom segment) rows, 3 columns, starting at y,1
 def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
     bar_width = 3
     bar_height = 16
@@ -91,8 +92,9 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=1):
     
 ## Border Draw Functions ##
     
-# Draws a border around a 17 x 9 grid, either at the top
-# or bottom of the panel, divided into a 2 x 4 grid
+# Draws a border around a 16 (top segment) or a 17 (bottom segment)
+# x 9 grid, divided into a 2 x 4 grid. For the bottom segment,
+# the last grid will have an extra row
 def draw_8_x_8_grid(grid, border_value, y):
     height = 16 if y == 0 else 17
     grid[:, y] = border_value # Top
@@ -107,31 +109,30 @@ def draw_8_x_8_grid(grid, border_value, y):
     grid[:, y+8] = border_value
     grid[:, y+12] = border_value
     
-# Draws a border around a 17 x 9 grid, split horizontally
-# into two sections at the specified column
-def draw_2_x_1_horiz_grid(grid, border_value, y, x=4):
+# Draws a border around a 16 (top segment) or a 17 (bottom segment)
+# x 9 grid, split horizontally into two sections at the specified column
+def draw_2_x_1_horiz_grid(grid, border_value, y, x_split_idx=4):
     height = 16 if y == 0 else 17
-    top = y if y == 0 else y+1
     grid[:, y] = border_value # Top
     grid[:, y+height] = border_value # Bottom
 
     grid[0, y:y+height] = border_value # Left
     grid[8, y:y+height] = border_value # Right
-    grid[x, y:y+height] = border_value # Middle
+    grid[x_split_idx, y:y+height] = border_value # Middle
     
-# Draws a border around a 17 x 9 grid, split vertically
-# into two sections at the specified row
-def draw_1_x_2_vert_grid(grid, border_value, y, split_idx = 3):
+# Draws a border around a 16 (top segment) or a 17 (bottom segment),
+# split vertically into two sections at the specified row
+def draw_1_x_2_vert_grid(grid, border_value, y, y_split_idx = 3):
     height = 16 if y == 0 else 17
     grid[:, y] = border_value # Top
     grid[:, y+height] = border_value # Bottom
-    grid[:, y+split_idx] = border_value # Middle
+    grid[:, y+y_split_idx] = border_value # Middle
 
     grid[0, y:y+height] = border_value # Left
     grid[8, y:y+height] = border_value # Right
     
 # Draws a border around the entire panel, split
-# vertically into equal segments
+# vertically into two equal segments
 def draw_outline_border(grid, border_value):
     grid[:, 0] = border_value # Top
     grid[:, 16] = border_value # Middle

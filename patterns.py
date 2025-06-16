@@ -1,7 +1,7 @@
 import numpy as np
 
 
-lightning_bolt = np.array( [[0,0,0,0,0,0,0], # 0
+lightning_bolt_bot = np.array( [[0,0,0,0,0,0,0], # 0
                             [0,0,0,0,0,1,0], # 1
                             [0,0,0,0,1,1,0], # 2
                             [0,0,0,1,1,0,0], # 3
@@ -14,6 +14,21 @@ lightning_bolt = np.array( [[0,0,0,0,0,0,0], # 0
                             [0,1,1,0,0,0,0], #10
                             [0,1,0,0,0,0,0], #11
                             [0,0,0,0,0,0,0]],#12
+                            dtype=bool).T
+
+# Cut out bottom row because top segment is one row shorter
+lightning_bolt_top = np.array( [[0,0,0,0,0,0,0], # 0
+                            [0,0,0,0,0,1,0], # 1
+                            [0,0,0,0,1,1,0], # 2
+                            [0,0,0,1,1,0,0], # 3
+                            [0,0,1,1,1,0,0], # 4
+                            [0,1,1,1,0,0,0], # 5
+                            [0,1,1,1,1,1,0], # 6
+                            [0,0,0,1,1,1,0], # 7
+                            [0,0,1,1,1,0,0], # 8
+                            [0,0,1,1,0,0,0], # 9
+                            [0,1,1,0,0,0,0], #10
+                            [0,1,0,0,0,0,0]],#11
                             dtype=bool).T
 
 # This table represents the 3x3 grid of LEDs to be drawn for each fill ratio

@@ -98,9 +98,7 @@ def main(args):
         
     app_functions = {
         "cpu": draw_cpu,
-        # "temp": draw_temps,
         "mem-bat": draw_mem_bat,
-        # "fan": draw_fans,
         "disk": draw_disk,
         "net": draw_net
     }
