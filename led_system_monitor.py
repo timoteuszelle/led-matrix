@@ -11,8 +11,7 @@ import os
 
 # Internal Dependencies
 from drawing import draw_outline_border, draw_ids_left, draw_ids_right, draw_app, draw_app_border, DrawingThread
-from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, \
-    TemperatureMonitor, FanSpeedMonitor, get_monitor_brightness
+from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, get_monitor_brightness
 
 # External Dependencies
 import numpy as np
@@ -43,8 +42,13 @@ def main(args):
     if not len(led_devices):
         print("No LED devices found")
         sys.exit(0)
-    print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
+    elif len(led_devices) == 1:
+        print(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
+        args.top_right = args.bottom_right = "none"
+    else:
+        print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
+    drawing_queues = []
     
     # Track key presses to reveal metrics ID in each panel section
     global alt_pressed
@@ -61,8 +65,6 @@ def main(args):
     cpu_monitor = CPUMonitor()
     memory_monitor = MemoryMonitor()
     battery_monitor = BatteryMonitor()
-    temperature_monitor = TemperatureMonitor()
-    fan_speed_monitor = FanSpeedMonitor()
     disk_monitor = DiskMonitor()
     network_monitor = NetworkMonitor()
 
@@ -70,11 +72,14 @@ def main(args):
     left_drawing_queue = queue.Queue(2)
     left_drawing_thread = DrawingThread(locations[0], left_drawing_queue)
     left_drawing_thread.start()    
+    drawing_queues.append(left_drawing_queue)
 
-    # Setup right panel drawing queue
-    right_drawing_queue = queue.Queue(2)
-    right_drawing_thread = DrawingThread(locations[1], right_drawing_queue)
-    right_drawing_thread.start()
+    # Setup right panel drawing queue (if present)
+    if len(locations) == 2:
+        right_drawing_queue = queue.Queue(2)
+        right_drawing_thread = DrawingThread(locations[1], right_drawing_queue)
+        right_drawing_thread.start()
+        drawing_queues.append(right_drawing_queue)
     
     def draw_cpu(arg, grid, foreground_value, idx):
         last_cpu_values = cpu_monitor.get()
@@ -100,7 +105,8 @@ def main(args):
         "cpu": draw_cpu,
         "mem-bat": draw_mem_bat,
         "disk": draw_disk,
-        "net": draw_net
+        "net": draw_net,
+        "none": lambda *x: x # noop
     }
         
     #################################################
@@ -141,7 +147,7 @@ def main(args):
                 continue
 
             # Draw by quadrants (i.e. to top and bottom of left and right panels)
-            for i, draw_queue in enumerate([left_drawing_queue, right_drawing_queue]):
+            for i, draw_queue in enumerate(drawing_queues):
                 if i == 0:
                     panel = 'left'
                     _args = [args.top_left, args.bottom_left]
@@ -178,7 +184,7 @@ def main(args):
     print("Exiting")
         
 if __name__ == "__main__":
-    app_names = ["cpu", "net", "disk", "mem-bat"]
+    app_names = ["cpu", "net", "disk", "mem-bat", "none"]
     ###############################################################
     ###  Load additional app names from plugins for arg parser  ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):

@@ -161,6 +161,11 @@ metrics_funcs = {
     "bat": {
         "fn": draw_battery,
         "border": draw_1_x_2_vert_grid
+    },
+    #noop
+    "none": {
+        "fn": lambda *x: x,
+        "border": lambda *x: x
     }
 }
 
