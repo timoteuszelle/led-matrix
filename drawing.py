@@ -245,8 +245,11 @@ if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            plugin_metrics_funcs = getattr(module,'metrics_funcs')
-
-            for k,v in plugin_metrics_funcs.items():
-                    metrics_funcs[k] = v
+            for k,v in module.metrics_funcs.items():
+                metrics_funcs[k] = v
+                
+            from drawing import id_patterns
+            for k,v in module.id_patterns.items():
+                id_patterns[k] = v
+            
 ################################################################

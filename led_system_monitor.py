@@ -122,8 +122,7 @@ def main(args):
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
 
-                plugin_app_funcs = module.app_funcs
-                for obj in plugin_app_funcs:
+                for obj in module.app_funcs:
                     app_functions[obj["name"]] = obj["fn"]
     #################################################
     
@@ -198,8 +197,7 @@ if __name__ == "__main__":
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
 
-                plugin_app_names = module.metrics_funcs.keys()
-                app_names += plugin_app_names
+                app_names += module.metrics_funcs.keys()
     #################################################################
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
