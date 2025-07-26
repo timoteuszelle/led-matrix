@@ -34,8 +34,8 @@ python3.pkgs.buildPythonApplication rec {
     # Copy plugins directory
     cp -r plugins $out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/
     
-    # Create wrapper script
-    makeWrapper ${python3}/bin/python $out/bin/led-matrix-monitor \
+    # Create wrapper script with proper Python environment
+    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev ])}/bin/python $out/bin/led-matrix-monitor \
       --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/led_system_monitor.py" \
       --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages"
   '';
