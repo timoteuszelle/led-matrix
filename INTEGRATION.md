@@ -21,7 +21,10 @@ In `/home/tim/zaneyos/flake.nix`, add this as an input:
     stylix.url = "github:danth/stylix/release-25.05";
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
-    led-matrix-monitoring.url = "path:/run/media/tim/data/personal-git/led-matrix-monitoring"; # Add this line
+    led-matrix-monitoring = {
+      url = "github:timoteuszelle/led-matrix/fix/robustness-and-permission-handling";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
