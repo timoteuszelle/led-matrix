@@ -126,11 +126,16 @@ def main(args):
     #################################################
         ###      Load app functions from plugins      ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
-        plugins_dir = './plugins/'
+        # Try to find plugins directory - either in current dir or installed location
+        import os.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_dir = os.path.join(current_dir, 'plugins')
+        if not os.path.exists(plugins_dir):
+            plugins_dir = './plugins/'
         for file in os.listdir(plugins_dir):
             if file.endswith('_plugin.py'):
-                module_name = re.sub(file, "_plugin.py", "")
-                file_path = plugins_dir + file
+                module_name = re.sub("_plugin.py", "", file)
+                file_path = os.path.join(plugins_dir, file)
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
@@ -201,11 +206,16 @@ if __name__ == "__main__":
     ###############################################################
     ###  Load additional app names from plugins for arg parser  ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
-        plugins_dir = './plugins/'
+        # Try to find plugins directory - either in current dir or installed location
+        import os.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_dir = os.path.join(current_dir, 'plugins')
+        if not os.path.exists(plugins_dir):
+            plugins_dir = './plugins/'
         for file in os.listdir(plugins_dir):
             if file.endswith('_plugin.py'):
-                module_name = re.sub(file, "_plugin.py", "")
-                file_path = plugins_dir + file
+                module_name = re.sub("_plugin.py", "", file)
+                file_path = os.path.join(plugins_dir, file)
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
