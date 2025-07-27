@@ -200,6 +200,58 @@ def main(args):
         time.sleep(0.1)
         
     print("Exiting")
+
+def cli_main():
+    """Entry point for setuptools console script"""
+    app_names = ["cpu", "net", "disk", "mem-bat", "none"]
+    ###############################################################
+    ###  Load additional app names from plugins for arg parser  ###
+    if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
+        # Try to find plugins directory - either in current dir or installed location
+        import os.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_dir = os.path.join(current_dir, 'plugins')
+        if not os.path.exists(plugins_dir):
+            plugins_dir = './plugins/'
+        for file in os.listdir(plugins_dir):
+            if file.endswith('_plugin.py'):
+                module_name = re.sub("_plugin.py", "", file)
+                file_path = os.path.join(plugins_dir, file)
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+
+                app_names += module.metrics_funcs.keys()
+    #################################################################
+    parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
+                            description="Displays system performance metrics in the Framework 16 LED Matrix input module",
+                            formatter_class=ArgumentDefaultsHelpFormatter)
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("--help", "-h", action="help",
+                         help="Show this help message and exit")
+    
+    addGroup = parser.add_argument_group(title = "Metrics Display Options")
+    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=app_names,
+                         help="Metrics to display in the top section of the left matrix panel")
+    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=app_names,
+                         help="Metrics to display in the bottom section of the left matrix panel")
+    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=app_names,
+                         help="Metrics to display in the top section of the right matrix panel")
+    addGroup.add_argument("--bottom-right", "-br", type=str, default="disk", choices=app_names,
+                         help="Metrics to display in the top section of the right matrix panel")
+    
+    addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
+    addGroup.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
+    
+    args = parser.parse_args()
+    print(f"top left {args.top_left}")
+    print(f"bottom left {args.bottom_left}")
+    print(f"top right {args.top_right}")
+    print(f"bottom right {args.bottom_right}")
+    if args.no_key_listener: print("Key listener disabled")
+    
+    main(args)
         
 if __name__ == "__main__":
     app_names = ["cpu", "net", "disk", "mem-bat", "none"]

@@ -80,6 +80,73 @@ pyenv virtualenv 3.11 led-matrix-env
 pyenv activate led-matrix-env
 pip install -r requirements.txt
 ```
+
+## Required Permissions
+
+### LED Matrix Device Access
+
+By default, LED Matrix devices appear as serial devices (e.g., `/dev/ttyACM0`, `/dev/ttyACM1`) that are typically owned by root with restricted permissions. To allow your user to access these devices, you have several options:
+
+#### Option 1: Add User to dialout Group (Recommended)
+```bash
+# Add your user to the dialout group
+sudo usermod -a -G dialout $USER
+
+# Log out and log back in, or use:
+newgrp dialout
+
+# Verify group membership
+groups $USER
+```
+
+#### Option 2: Create Custom udev Rules
+Create a udev rule file to automatically set proper permissions:
+
+```bash
+# Create the udev rule file
+sudo tee /etc/udev/rules.d/99-framework-led-matrix.rules << EOF
+# Framework 16 LED Matrix Input Modules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
+EOF
+
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+#### Option 3: Run as Root (Not Recommended)
+While running as root will bypass permission issues, this is not recommended for security reasons:
+```bash
+sudo python3 led_system_monitor.py
+```
+
+### Keyboard Input Access (Optional)
+
+For the Alt+I keyboard shortcut feature to work, the application needs read access to keyboard input devices:
+
+```bash
+# Add user to input group (be aware of security implications)
+sudo usermod -a -G input $USER
+
+# Log out and log back in, then verify
+groups $USER
+```
+
+**Security Note:** Adding your user to the `input` group allows any program running as your user to potentially capture keystrokes. Consider the security implications before doing this, or use `--no-key-listener` to disable this feature.
+
+### Verifying Device Access
+
+To check if your LED Matrix devices are properly accessible:
+
+```bash
+# List LED Matrix devices
+ls -la /dev/ttyACM*
+
+# Check if they're accessible by your user
+python3 -c "from serial.tools import list_ports; [print(f'{p.device}: {p.description}') for p in list_ports.comports() if 'LED Matrix' in str(p)]"
+```
+
 ## Run
 ```
 cd led-matrix
