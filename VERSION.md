@@ -1,9 +1,9 @@
 # Version Information
 
 ## Current Version
-- **Version**: 1.0.0
-- **Branch**: fix/robustness-and-permission-handling
-- **Latest Commit**: 31c313214572e2f2b49cb21e961e5aa64a2b6c51
+- **Version**: 1.0.1
+- **Branch**: nixpkgs-v1.0.1
+- **Latest Commit**: TBD
 
 ## Usage with specific commit
 
@@ -17,6 +17,13 @@ led-matrix-monitoring = {
 ```
 
 ## Changelog
+
+### v1.0.1 (2025-07-28)
+- Fixed pyproject.toml deprecation warnings:
+  - Updated license format to modern SPDX expression
+  - Removed deprecated license classifier
+- Improved Python packaging standards compliance
+- Prepared for nixpkgs pyproject.toml build system support
 
 ### v1.0.0 (2025-07-26)
 - Initial NixOS packaging
