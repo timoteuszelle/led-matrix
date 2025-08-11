@@ -1,29 +1,27 @@
 # Framework 16 LED Matrix System Monitoring Application
 
-This software is intended for use on a Framework 16 laptop with LED Matrix Panels installed. It's a clone of the [LED System Monitor](https://code.karsttech.com/jeremy/FW_LED_System_Monitor.git) project, with certain modifications and extensions applied.
+This software is intended for use on a Framework 16 laptop with LED Matrix Panels installed.
 
-## Original Capabilities
-Display system performance characteristics in real-time
-* Top Left: CPU utilization
-* Bottom Left: Battery charge level and plug status + memory utilization
-* Top Right: Disk Input/Output rates
-* Bottom Right: Network Upload/Download rates
-
-## Enhanced Capabilities
-* Pre-defined applications can be displayed on any quadrant
+## Capabilities
+* Display system performance characteristics in real-time
+  * CPU utilization
+  * Battery charge level and plug status + memory utilization
+  * Disk Input/Output rates
+  * Network Upload/Download rates
+  * Temperature sensor readings
+  * Fan speeds
+* Display any system monitoring app on any quadrant
   * Top or bottom of left or right panel
   * Specified via program arguments
-* Additional system performance applications
-  * Temperature sensor values (average of sensors on each of up to eight devices)
-  * Fan speeds (max 2 supported)
-* Keyboard shortcut identifies apps running in each quadrant by displaying abbeviated name 
+* Display a "snapshot" from specified json file(s) on either or both panels. Continuous or periodic display is supported.
+* Keyboard shortcut identifies apps running in each quadrant by displaying abbreviated name 
 * Plugin framework supports simplified development of addiitonal LED Panel applications
 * Automatic detection of left and right LED panels
 ## Installation
 * Install [PyEnv](https://github.com/pyenv/pyenv)  
 * Any other python virtual environment package may be used. Commands below work with PyEnv.
 ```
-cd led-matrix
+cd FW_LED_System_Monitor
 pyenv install 3.11
 pyenv virtualenv 3.11 3.11
 pyenv activate
@@ -32,8 +30,16 @@ pip install -r requirements.txt
 ## Run
 ```
 cd led-matrix
-python led-sysyem-monitor.py [--help] [--top-left {cpu,net,disk,mem-bat,none,temp,fan}] [--bottom-left {cpu,net,disk,mem-bat,none,temp,fan}] [--top-right {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--bottom-right {cpu,net,disk,mem-bat,none,temp,fan}] [--no-key-listener] [--disable-plugins]
+python led-sysyem-monitor.py [--help] [--top-left {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--bottom-left {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--top-right {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--bottom-right {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--left-snap LEFT_SNAP]
+                             [--right-snap RIGHT_SNAP]
+                             [--snapshot-path SNAPSHOT_PATH]
+                             [--snapshot-interval SNAPSHOT_INTERVAL]
+                             [--snapshot-duration SNAPSHOT_DURATION]
+                             [--no-key-listener] [--disable-plugins]
 python led-sysyem-monitor.py --help #For more verbose help info
 ```
 ## Run as a Linux service

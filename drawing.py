@@ -6,6 +6,8 @@ import importlib.util
 import sys
 import os
 import re
+import json
+from pathlib import Path
 
 # Internal Dependencies
 from commands import Commands, send_command
@@ -89,6 +91,21 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=0):
             grid[bar_x_offset+i,33-pixels_col:33] = bar_value
         else:
             grid[bar_x_offset+i,1:1+pixels_col] = bar_value
+            
+warned = set()
+def draw_snapshot(grid, fill_value, file, path, panel):
+    global warned
+    subdirs = [ f.name for f in os.scandir(path) if f.is_dir() and f.name in ['left', 'right']]
+    subdir = panel if panel in subdirs else ''
+    try:
+        with open(os.path.join(path, subdir, file)) as f:
+            snap = json.load(f)
+            grid[:,:] = np.array(snap).T * fill_value
+    except FileNotFoundError as e:
+        if not file in warned:
+            print(f"File {file} not found")
+            warned.add(file)
+    
     
 ## Border Draw Functions ##
     
@@ -141,7 +158,7 @@ def draw_outline_border(grid, border_value):
     grid[8, :] = border_value # Right
     
 # Maps an app arg value to abstract app and border draw functions
-metrics_funcs = {
+direct_draw_funcs = {
     "cpu": {
         "fn": draw_spiral_vals,
         "border": draw_8_x_8_grid
@@ -162,6 +179,10 @@ metrics_funcs = {
         "fn": draw_battery,
         "border": draw_1_x_2_vert_grid
     },
+    "snap": {
+        "fn": draw_snapshot,
+        "border": lambda *x: None # No border
+    },
     #noop
     "none": {
         "fn": lambda *x: x,
@@ -171,25 +192,23 @@ metrics_funcs = {
 
 # Draws the app for the specified arg value
 def draw_app(app, *arguments, **kwargs):
-    metrics_funcs[app].get('fn')(*arguments, **kwargs)
+    direct_draw_funcs[app].get('fn')(*arguments, **kwargs)
     
 # Draws the border for the specified arg value
 def draw_app_border(app, *arguments):
-    metrics_funcs[app].get('border')(*arguments)
+    direct_draw_funcs[app].get('border')(*arguments)
             
-# Draw the IDs of apps currently assigned to the top and bottom of the left panel
-def draw_ids_left(grid, top_left, bot_left, fill_value):
+# Draw the IDs of apps currently assigned to the top and bottom of a panel
+def draw_ids(grid, top_left, bot_left, fill_value):
     fill_grid_top = id_patterns[top_left]
     fill_grid_bot = id_patterns[bot_left]
     grid[1:8, 1:16] = fill_grid_top * fill_value
     grid[1:8, 18:-1] = fill_grid_bot * fill_value
     
-# Draw the IDs of apps currently assigned to the top and bottom of the right panel
-def draw_ids_right(grid, top_right, bot_right, fill_value):
-    fill_grid_top = id_patterns[top_right]
-    fill_grid_bot = id_patterns[bot_right]
-    grid[1:8, 1:16] = fill_grid_top * fill_value
-    grid[1:8, 18:-1] = fill_grid_bot * fill_value
+# Draw the ID of the app currently assigned to the full panel
+def draw_id(grid, id, fill_value):
+    fill_grid = id_patterns[id]
+    grid[:,:] = fill_grid * fill_value
 
 def draw_to_LEDs(s, grid):
     for i in range(grid.shape[0]):
@@ -245,8 +264,8 @@ if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            for k,v in module.metrics_funcs.items():
-                metrics_funcs[k] = v
+            for k,v in module.direct_draw_funcs.items():
+                direct_draw_funcs[k] = v
                 
             from drawing import id_patterns
             for k,v in module.id_patterns.items():

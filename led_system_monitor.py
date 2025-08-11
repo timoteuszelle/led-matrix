@@ -10,12 +10,12 @@ import os
 
 
 # Internal Dependencies
-from drawing import draw_outline_border, draw_ids_left, draw_ids_right, draw_app, draw_app_border, DrawingThread
+from drawing import draw_outline_border, draw_ids, draw_id, draw_app, draw_app_border, DrawingThread
 from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, get_monitor_brightness
 
 # External Dependencies
 import numpy as np
-import evdev
+from pynput.keyboard import Key, Listener
 from serial.tools import list_ports
 
 
@@ -34,9 +34,7 @@ def discover_led_devices():
         return sorted(locations, key = lambda x: re.sub('^\d+\-\d+\.', '', x[0]))
     except Exception as e:
         print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
-        
-device = evdev.InputDevice('/dev/input/event7')
-        
+                
 def main(args):    
     led_devices = discover_led_devices()
     if not len(led_devices):
@@ -101,13 +99,38 @@ def main(args):
         draw_app(arg, grid, last_network_upload, foreground_value, bar_x_offset=1, y=idx)
         draw_app(arg, grid, last_network_download, foreground_value, bar_x_offset=5, y=idx)
         
+    def draw_snap(grid, foreground_value, file, snap_path, panel):
+        draw_app("snap", grid, foreground_value, file, snap_path, panel)    
+        
     app_functions = {
         "cpu": draw_cpu,
         "mem-bat": draw_mem_bat,
         "disk": draw_disk,
         "net": draw_net,
+        "snap": draw_snap,
         "none": lambda *x: x # noop
     }
+    
+    def on_press(key):
+        global alt_pressed
+        global i_pressed
+        if type(key).__name__ == 'KeyCode':
+            if key.char == 'i':
+                i_pressed = True
+        elif key == Key.alt:
+            alt_pressed = True
+
+    def on_release(key):
+        global alt_pressed
+        global i_pressed
+        if type(key).__name__ == 'KeyCode':
+            if key.char == 'i':
+                i_pressed = False
+        elif key == Key.alt:
+            alt_pressed = False
+        if key == Key.esc:
+            # Stop listener
+            return False
         
     #################################################
         ###      Load app functions from plugins      ###
@@ -126,61 +149,82 @@ def main(args):
                     app_functions[obj["name"]] = obj["fn"]
     #################################################
     
-    while True:
-        try:
-            screen_brightness = get_monitor_brightness()
-            background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
-            foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
-            grid = np.zeros((9,34), dtype = int)
-            active_keys = device.active_keys(verbose=True)
-            if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys and not args.no_key_listener:
-                draw_outline_border(grid, background_value)
-                draw_ids_left(grid, args.top_left, args.bottom_left, foreground_value)
-                left_drawing_queue.put(grid)
+    if args.snapshot_duration > args.snapshot_interval:
+        print("Snapshot duration must be less than snapshot interval. Exiting...")
+        sys.exit(0)
+    with Listener(
+        on_press=on_press,
+        on_release=on_release):
+        while True:
+            elapsed_time = time.time()
+            show_snapshot = True if args.snapshot_interval == 0 or elapsed_time % args.snapshot_interval <= args.snapshot_duration else False
+            try:
+                screen_brightness = get_monitor_brightness()
+                background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
+                foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
                 grid = np.zeros((9,34), dtype = int)
-                draw_outline_border(grid, background_value)
-                draw_ids_right(grid, args.top_right, args.bottom_right, foreground_value)
-                right_drawing_queue.put(grid)
-                grid = np.zeros((9,34), dtype = int)
-                time.sleep(0.1)
-                continue
-
-            # Draw by quadrants (i.e. to top and bottom of left and right panels)
-            for i, draw_queue in enumerate(drawing_queues):
-                if i == 0:
-                    panel = 'left'
-                    _args = [args.top_left, args.bottom_left]
-                else:
-                    panel = 'right'
-                    _args = [args.top_right, args.bottom_right]
-                grid = np.zeros((9,34), dtype = int)
-                for j, arg in enumerate(_args):
-                    if j == 0:
-                        idx = 0
-                        loc = 'top'
+                if i_pressed and alt_pressed and not args.no_key_listener:
+                    if args.left_snap and show_snapshot:
+                        draw_id(grid, "snap", foreground_value)
                     else:
-                        idx = 16
-                        loc = 'bottom'
-                    try:
-                        func = app_functions[arg]
-                        func(arg, grid, foreground_value, idx)
-                    except KeyError:
-                        print(app_functions.keys())
-                        print(f"Unrecognized display option {arg} for {loc} {panel}")
-                    if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
-                    draw_app_border(arg, grid, background_value, idx)
-                draw_queue.put(grid)
-                
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            import traceback
-            print(f"Error in main loop: {e}")
-            traceback.print_exc()
-            time.sleep(1.0)
-        time.sleep(0.1)
-        
-    print("Exiting")
+                        draw_outline_border(grid, background_value)
+                        draw_ids(grid, args.top_left, args.bottom_left, foreground_value)
+                    left_drawing_queue.put(grid)
+                    grid = np.zeros((9,34), dtype = int)
+                    if args.right_snap and show_snapshot:
+                        draw_id(grid, "snap", foreground_value)
+                    else:
+                        draw_outline_border(grid, background_value)
+                        draw_ids(grid, args.top_right, args.bottom_right, foreground_value)
+                    right_drawing_queue.put(grid)
+                    grid = np.zeros((9,34), dtype = int)
+                    time.sleep(0.1)
+                    continue
+
+                # Draw by half or whole panel, depending on program args
+                for i, draw_queue in enumerate(drawing_queues):
+                    grid = np.zeros((9,34), dtype = int)
+                    if i == 0:
+                        panel = 'left'
+                        if args.left_snap is not None and show_snapshot:
+                            app_functions["snap"](grid, foreground_value, args.left_snap, args.snapshot_path, 'left')
+                            draw_queue.put(grid)
+                            continue
+                        else:
+                            _args = [args.top_left, args.bottom_left]
+                    else:
+                        panel = 'right'
+                        if args.right_snap is not None and show_snapshot:
+                            app_functions["snap"](grid, foreground_value, args.right_snap, args.snapshot_path, 'right')
+                            draw_queue.put(grid)
+                            continue
+                        _args = [args.top_right, args.bottom_right]
+                    for j, arg in enumerate(_args):
+                        if j == 0:
+                            idx = 0
+                            loc = 'top'
+                        else:
+                            idx = 16
+                            loc = 'bottom'
+                        try:
+                            func = app_functions[arg]
+                            func(arg, grid, foreground_value, idx)
+                        except KeyError:
+                            print(f"Unrecognized display option {arg} for {loc} {panel}")
+                        if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
+                        draw_app_border(arg, grid, background_value, idx)
+                    draw_queue.put(grid)
+                    
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                import traceback
+                print(f"Error in main loop: {e}")
+                traceback.print_exc()
+                time.sleep(1.0)
+            time.sleep(0.1)
+            
+        print("Exiting")
         
 if __name__ == "__main__":
     app_names = ["cpu", "net", "disk", "mem-bat", "none"]
@@ -197,12 +241,12 @@ if __name__ == "__main__":
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
 
-                app_names += module.metrics_funcs.keys()
+                app_names += map(lambda o: o["name"], module.app_funcs)
     #################################################################
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
                             formatter_class=ArgumentDefaultsHelpFormatter)
-    mode_group = parser.add_mutually_exclusive_group()
+    mode_group = parser.add_argument_group()
     mode_group.add_argument("--help", "-h", action="help",
                          help="Show this help message and exit")
     
@@ -215,6 +259,19 @@ if __name__ == "__main__":
                          help="Metrics to display in the top section of the right matrix panel")
     addGroup.add_argument("--bottom-right", "-br", type=str, default="disk", choices=app_names,
                          help="Metrics to display in the top section of the right matrix panel")
+    addGroup.add_argument("--left-snap", "-ls", type=str, default=None,
+                         help="Snapshot file to display on the left panel. Specify * to cycle through all files in the snapshot dir")
+    addGroup.add_argument("--right-snap", "-rs", type=str, default=None,
+                         help="Snapshot file to display on the right panel. Specify * to cycle through all files in the snapshot dir")
+    addGroup.add_argument("--snapshot-path", "-sp", type=str, default="snapshot_files",
+                          help="The file path that contains either the snapshot files that may be displayed on either panel or " +
+                          "'left' and 'right' directories that contain files that may be displayed on the respective panel")
+    addGroup.add_argument("--snapshot-interval", "-si", type=int, default=0,
+                          help="The interval (in seconds) at which the selected snapshot files will be rendered. A value " +
+                          "of zero means the snapshots should be rendered continuously")
+    addGroup.add_argument("--snapshot-duration", "-sd", type=int, default=0,
+                          help="The number of seconds that the snapshot file will be rendered at the specified interval. Must be " +
+                          "less than the value of --snapshot-interval")
     
     addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
     addGroup.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
@@ -224,6 +281,8 @@ if __name__ == "__main__":
     print(f"bottom left {args.bottom_left}")
     print(f"top right {args.top_right}")
     print(f"bottom right {args.bottom_right}")
+    print(f"left snap {args.left_snap}")
+    print(f"right snap {args.right_snap}")
     if args.no_key_listener: print("Key listener disabled")
     
     main(args)
