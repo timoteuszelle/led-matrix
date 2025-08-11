@@ -1,6 +1,6 @@
 # Framework 16 LED Matrix System Monitoring Application
 
-This software is intended for use on a Framework 16 laptop with LED Matrix Panels installed.
+This software is intended for use on a Framework 16 laptop with LED Matrix Panels installed. It's a clone of the [LED System Monitor](https://code.karsttech.com/jeremy/FW_LED_System_Monitor.git) project, with certain modifications and extensions applied.
 
 ## Capabilities
 * Display system performance characteristics in real-time
@@ -17,6 +17,12 @@ This software is intended for use on a Framework 16 laptop with LED Matrix Panel
 * Keyboard shortcut identifies apps running in each quadrant by displaying abbreviated name 
 * Plugin framework supports simplified development of addiitonal LED Panel applications
 * Automatic detection of left and right LED panels
+## Capabilities added to the original implementation
+ * Temp sensor and fan speed apps
+ * Metrics apps configurable to any matrix quadrant
+ * Plugin capability
+ * Automatic device detection
+ * Snapshot app
 ## Installation
 * Install [PyEnv](https://github.com/pyenv/pyenv)  
 * Any other python virtual environment package may be used. Commands below work with PyEnv.
