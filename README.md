@@ -21,12 +21,17 @@ This software is intended for use on a Framework 16 laptop with LED Matrix Panel
 * Install [PyEnv](https://github.com/pyenv/pyenv)  
 * Any other python virtual environment package may be used. Commands below work with PyEnv.
 ```
-cd FW_LED_System_Monitor
+cd led-matrix
 pyenv install 3.11
 pyenv virtualenv 3.11 3.11
 pyenv activate
 pip install -r requirements.txt
 ```
+* If you want to run the code as a linux service, you need to install the python dependencies as the root user
+* ```ic
+  cd led-matrix
+  sudo pip install -r requirements.txt
+  ```
 ## Run
 ```
 cd led-matrix
@@ -56,6 +61,7 @@ sudo systemctl start|stop|restart|status fwledmonitor
 * Add a file in the `plugins` dir with a name that matches the blob pattern `*_plugin.py`
 * See `temp_fan_plugin.py` for an implementation example
 ## Notes
+* See https://github.com/FrameworkComputer/inputmodule-rs for info about the LED matrix device. Be sure to run the code that installs the udev rules for accessing the devices.
 * To list your input devices, use the following python code after installing [Python-evdev](https://python-evdev.readthedocs.io/en/latest/index.html)
 ```
 >>> import evdev
