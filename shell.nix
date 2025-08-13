@@ -1,22 +1,32 @@
-with import <nixpkgs> {};
-mkShell {
-  buildInputs = [
-    stdenv.cc.cc.lib
-    libgcc
-    zstd
-    python311
-    python311Packages.pip
-    python311Packages.virtualenv
-    rocmPackages.rocm-runtime
-    rocmPackages.hipblas
-    rocmPackages.rocblas
+{ pkgs ? import <nixpkgs> {} }:
+
+let
+  led-matrix-monitoring = pkgs.callPackage ./default.nix {};
+in
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    # The built package for testing
+    led-matrix-monitoring
+    
+    # Development dependencies
+    python3
+    python3Packages.pyserial
+    python3Packages.numpy
+    python3Packages.psutil
+    python3Packages.evdev
+    python3Packages.pynput
+    
+    # Development tools
+    python3Packages.pip
+    python3Packages.setuptools
+    python3Packages.wheel
   ];
-  LD_LIBRARY_PATH = lib.makeLibraryPath [
-    stdenv.cc.cc.lib
-    libgcc
-    zstd
-    rocmPackages.rocm-runtime
-    rocmPackages.hipblas
-    rocmPackages.rocblas
-  ];
+  
+  shellHook = ''
+    echo "LED Matrix Monitoring Development Environment"
+    echo "Available commands:"
+    echo "  python3 led_system_monitor.py --help"
+    echo "  led-matrix-monitor --help"
+    echo "  nix build"
+  '';
 }
