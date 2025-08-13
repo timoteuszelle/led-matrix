@@ -1,6 +1,7 @@
 #!/bin/bash
-args="$*"
 chmod +x run.sh
+dsp=$DISPLAY
+args="$*"
 rm -f fwledmonitor.service || true
 sed -i "s#led_system_monitor.py.*\$#led_system_monitor.py ${args}#" run.sh
 cat <<EOF >>./fwledmonitor.service
@@ -9,6 +10,7 @@ Description=Framework 16 LED System Monitor
 After=network.service
 
 [Service]
+Environment=DISPLAY=${dsp}
 Type=simple
 Restart=always
 WorkingDirectory=$PWD

@@ -24,23 +24,27 @@ chmod +x run.sh
 
 The `run.sh` script will automatically detect your Linux distribution and install the required dependencies.
 
-## Original Capabilities
-Display system performance characteristics in real-time
-* Top Left: CPU utilization
-* Bottom Left: Battery charge level and plug status + memory utilization
-* Top Right: Disk Input/Output rates
-* Bottom Right: Network Upload/Download rates
-
-## Enhanced Capabilities
-* Pre-defined applications can be displayed on any quadrant
+## Capabilities
+* Display system performance characteristics in real-time
+  * CPU utilization
+  * Battery charge level and plug status + memory utilization
+  * Disk Input/Output rates
+  * Network Upload/Download rates
+  * Temperature sensor readings
+  * Fan speeds
+* Display any system monitoring app on any quadrant
   * Top or bottom of left or right panel
   * Specified via program arguments
-* Additional system performance applications
-  * Temperature sensor values (average of sensors on each of up to eight devices)
-  * Fan speeds (max 2 supported)
-* Keyboard shortcut identifies apps running in each quadrant by displaying abbeviated name 
+* Display a "snapshot" from specified json file(s) on either or both panels. Continuous or periodic display is supported.
+* Keyboard shortcut identifies apps running in each quadrant by displaying abbreviated name 
 * Plugin framework supports simplified development of addiitonal LED Panel applications
 * Automatic detection of left and right LED panels
+## Capabilities added to the original implementation
+ * Temp sensor and fan speed apps
+ * Metrics apps configurable to any matrix quadrant
+ * Plugin capability
+ * Automatic device detection
+ * Snapshot app
 ## Installation
 
 ### Option 1: System Package Installation (Recommended)
@@ -104,7 +108,7 @@ Create a udev rule file to automatically set proper permissions:
 
 ```bash
 # Create the udev rule file
-sudo tee /etc/udev/rules.d/99-framework-led-matrix.rules << EOF
+sudo tee /etc/udev/rules.d/99-framework-led-matrix.rules <<EOF
 # Framework 16 LED Matrix Input Modules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
@@ -147,11 +151,26 @@ ls -la /dev/ttyACM*
 python3 -c "from serial.tools import list_ports; [print(f'{p.device}: {p.description}') for p in list_ports.comports() if 'LED Matrix' in str(p)]"
 ```
 
+### Linux Service Dependencies
+
+If you want to run the code as a Linux service, you need to install the python dependencies as the root user:
+```bash
+cd led-matrix
+sudo pip install -r requirements.txt
+```
 ## Run
 ```
 cd led-matrix
-python led-sysyem-monitor.py [--help] [--top-left {cpu,net,disk,mem-bat,none,temp,fan}] [--bottom-left {cpu,net,disk,mem-bat,none,temp,fan}] [--top-right {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--bottom-right {cpu,net,disk,mem-bat,none,temp,fan}] [--no-key-listener] [--disable-plugins]
+python led-sysyem-monitor.py [--help] [--top-left {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--bottom-left {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--top-right {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--bottom-right {cpu,net,disk,mem-bat,none,temp,fan}]
+                             [--left-snap LEFT_SNAP]
+                             [--right-snap RIGHT_SNAP]
+                             [--snapshot-path SNAPSHOT_PATH]
+                             [--snapshot-interval SNAPSHOT_INTERVAL]
+                             [--snapshot-duration SNAPSHOT_DURATION]
+                             [--no-key-listener] [--disable-plugins]
 python led-sysyem-monitor.py --help #For more verbose help info
 ```
 ## Run as a Linux service
@@ -168,6 +187,7 @@ sudo systemctl start|stop|restart|status fwledmonitor
 * Add a file in the `plugins` dir with a name that matches the blob pattern `*_plugin.py`
 * See `temp_fan_plugin.py` for an implementation example
 ## Notes
+* See https://github.com/FrameworkComputer/inputmodule-rs for info about the LED matrix device. Be sure to run the code that installs the udev rules for accessing the devices.
 * To list your input devices, use the following python code after installing [Python-evdev](https://python-evdev.readthedocs.io/en/latest/index.html)
 ```
 >>> import evdev

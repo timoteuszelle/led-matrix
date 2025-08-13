@@ -56,9 +56,9 @@ draw_bar = getattr(drawing, 'draw_bar')
 draw_2_x_1_horiz_grid = getattr(drawing, 'draw_2_x_1_horiz_grid')
 
 #### Implement low-level drawing functions ####
-# These functions will be dynamically imported by drawing.py and led_system_monitor.py
+# These functions will be dynamically imported by drawing.py and called by their correcsponding app function
 
-metrics_funcs = {
+direct_draw_funcs = {
     "temp": {
         "fn": draw_spiral_vals,
         "border": draw_8_x_8_grid
@@ -69,8 +69,9 @@ metrics_funcs = {
     }
 }
 
-# Implement app functions that call your high-level draw functions
-# These functions will be dynamically imported by led_system_monitor.py
+# Implement app functions that call your direct_draw functions
+# These functions will be dynamically imported by led_system_monitor.py. They call the direct_draw_funcs
+# defined above, providing additional capabilities that can be targeted to panel quadrants
 
 app_funcs = [
     {

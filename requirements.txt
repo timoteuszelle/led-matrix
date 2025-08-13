@@ -2,3 +2,4 @@ pyserial
 numpy
 psutil
 evdev
+pynput
