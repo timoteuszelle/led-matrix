@@ -32,6 +32,7 @@
             python3Packages.numpy
             python3Packages.psutil
             python3Packages.evdev
+            python3Packages.pynput
           ];
         };
       }

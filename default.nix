@@ -22,6 +22,7 @@ python3.pkgs.buildPythonApplication rec {
     numpy
     psutil
     evdev
+    pynput
   ];
 
   installPhase = ''
@@ -35,7 +36,7 @@ python3.pkgs.buildPythonApplication rec {
     cp -r plugins $out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/
     
     # Create wrapper script with proper Python environment
-    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev ])}/bin/python $out/bin/led-matrix-monitor \
+    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput ])}/bin/python $out/bin/led-matrix-monitor \
       --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/led_system_monitor.py" \
       --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages"
   '';
