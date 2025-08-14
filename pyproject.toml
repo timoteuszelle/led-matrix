@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "framework-led-matrix-monitor"
+version = "1.1.0"
+description = "System monitor application for Framework 16 LED matrix modules"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Timoteus Zelle", email = "46320568+timoteuszelle@users.noreply.github.com"}
+]
+maintainers = [
+    {name = "Timoteus Zelle", email = "46320568+timoteuszelle@users.noreply.github.com"}
+]
+keywords = ["framework", "led", "matrix", "system", "monitor", "hardware"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Hardware",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "numpy",
+    "psutil",
+    "pyserial",
+    "evdev",
+    "pynput",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+]
+
+[project.urls]
+Homepage = "https://github.com/timoteuszelle/led-matrix"
+Repository = "https://github.com/timoteuszelle/led-matrix"
+Issues = "https://github.com/timoteuszelle/led-matrix/issues"
+Documentation = "https://github.com/timoteuszelle/led-matrix#readme"
+
+[project.scripts]
+framework-led-matrix-monitor = "led_system_monitor:cli_main"
+
+[tool.setuptools]
+py-modules = [
+    "led_system_monitor",
+    "drawing", 
+    "monitors",
+    "patterns",
+    "commands",
+    "find_ports",
+]
+
+[tool.setuptools.packages.find]
+include = ["plugins*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py37']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"

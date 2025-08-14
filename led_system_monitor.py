@@ -15,6 +15,7 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 
 # External Dependencies
 import numpy as np
+import evdev
 from pynput.keyboard import Key, Listener
 from serial.tools import list_ports
 
@@ -31,11 +32,26 @@ def discover_led_devices():
                 locations.append((device.location, device.device))
         #location is of form: <bus>-<port>[-<port>]… port is of form x.y:n.m
         # Sort by y:n.m to get the devices in left-right order
-        return sorted(locations, key = lambda x: re.sub('^\d+\-\d+\.', '', x[0]))
+        return sorted(locations, key = lambda x: re.sub(r'^\d+\-\d+\.', '', x[0]))
     except Exception as e:
         print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
-                
+        
+# Global device variable - will be initialized in main() if key listener enabled
+device = None
 def main(args):    
+    # Initialize evdev device for key listening if not disabled
+    global device
+    if not args.no_key_listener:
+        try:
+            device = evdev.InputDevice('/dev/input/event7')
+        except (PermissionError, FileNotFoundError, OSError) as e:
+            print(f"Warning: Cannot access keyboard device for key listening: {e}")
+            print("Key listener will be disabled. Use --no-key-listener to suppress this warning.")
+            args.no_key_listener = True
+            device = None
+    else:
+        device = None
+    
     led_devices = discover_led_devices()
     if not len(led_devices):
         print("No LED devices found")
@@ -135,11 +151,16 @@ def main(args):
     #################################################
         ###      Load app functions from plugins      ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
-        plugins_dir = './plugins/'
+        # Try to find plugins directory - either in current dir or installed location
+        import os.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_dir = os.path.join(current_dir, 'plugins')
+        if not os.path.exists(plugins_dir):
+            plugins_dir = './plugins/'
         for file in os.listdir(plugins_dir):
             if file.endswith('_plugin.py'):
-                module_name = re.sub(file, "_plugin.py", "")
-                file_path = plugins_dir + file
+                module_name = re.sub("_plugin.py", "", file)
+                file_path = os.path.join(plugins_dir, file)
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
@@ -149,35 +170,48 @@ def main(args):
                     app_functions[obj["name"]] = obj["fn"]
     #################################################
     
-    if args.snapshot_duration > args.snapshot_interval:
-        print("Snapshot duration must be less than snapshot interval. Exiting...")
-        sys.exit(0)
+    # Snapshot duration validation
+    if hasattr(args, 'snapshot_duration') and hasattr(args, 'snapshot_interval'):
+        if args.snapshot_duration > args.snapshot_interval:
+            print("Snapshot duration must be less than snapshot interval. Exiting...")
+            sys.exit(0)
+    
+    # Use pynput Listener for cross-platform compatibility, but fallback to evdev if available
     with Listener(
         on_press=on_press,
         on_release=on_release):
         while True:
             elapsed_time = time.time()
-            show_snapshot = True if args.snapshot_interval == 0 or elapsed_time % args.snapshot_interval <= args.snapshot_duration else False
+            show_snapshot = True if not hasattr(args, 'snapshot_interval') or args.snapshot_interval == 0 or elapsed_time % args.snapshot_interval <= getattr(args, 'snapshot_duration', 0) else False
             try:
                 screen_brightness = get_monitor_brightness()
                 background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
                 foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
                 grid = np.zeros((9,34), dtype = int)
-                if i_pressed and alt_pressed and not args.no_key_listener:
-                    if args.left_snap and show_snapshot:
+                
+                # Check for key combo using both evdev (if available) and pynput
+                active_keys = device.active_keys(verbose=True) if device else []
+                evdev_key_pressed = (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys if device else False
+                pynput_key_pressed = i_pressed and alt_pressed
+                key_combo_active = (evdev_key_pressed or pynput_key_pressed) and not args.no_key_listener
+                
+                if key_combo_active:
+                    # Show app IDs for both panels
+                    if hasattr(args, 'left_snap') and args.left_snap and show_snapshot:
                         draw_id(grid, "snap", foreground_value)
                     else:
                         draw_outline_border(grid, background_value)
                         draw_ids(grid, args.top_left, args.bottom_left, foreground_value)
                     left_drawing_queue.put(grid)
-                    grid = np.zeros((9,34), dtype = int)
-                    if args.right_snap and show_snapshot:
-                        draw_id(grid, "snap", foreground_value)
-                    else:
-                        draw_outline_border(grid, background_value)
-                        draw_ids(grid, args.top_right, args.bottom_right, foreground_value)
-                    right_drawing_queue.put(grid)
-                    grid = np.zeros((9,34), dtype = int)
+                    
+                    if len(drawing_queues) > 1:  # Right panel exists
+                        grid = np.zeros((9,34), dtype = int)
+                        if hasattr(args, 'right_snap') and args.right_snap and show_snapshot:
+                            draw_id(grid, "snap", foreground_value)
+                        else:
+                            draw_outline_border(grid, background_value)
+                            draw_ids(grid, args.top_right, args.bottom_right, foreground_value)
+                        right_drawing_queue.put(grid)
                     time.sleep(0.1)
                     continue
 
@@ -186,19 +220,20 @@ def main(args):
                     grid = np.zeros((9,34), dtype = int)
                     if i == 0:
                         panel = 'left'
-                        if args.left_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.left_snap, args.snapshot_path, 'left')
+                        if hasattr(args, 'left_snap') and args.left_snap is not None and show_snapshot:
+                            app_functions["snap"](grid, foreground_value, args.left_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'left')
                             draw_queue.put(grid)
                             continue
                         else:
                             _args = [args.top_left, args.bottom_left]
                     else:
                         panel = 'right'
-                        if args.right_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.right_snap, args.snapshot_path, 'right')
+                        if hasattr(args, 'right_snap') and args.right_snap is not None and show_snapshot:
+                            app_functions["snap"](grid, foreground_value, args.right_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'right')
                             draw_queue.put(grid)
                             continue
                         _args = [args.top_right, args.bottom_right]
+                    
                     for j, arg in enumerate(_args):
                         if j == 0:
                             idx = 0
@@ -231,11 +266,16 @@ if __name__ == "__main__":
     ###############################################################
     ###  Load additional app names from plugins for arg parser  ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
-        plugins_dir = './plugins/'
+        # Try to find plugins directory - either in current dir or installed location
+        import os.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_dir = os.path.join(current_dir, 'plugins')
+        if not os.path.exists(plugins_dir):
+            plugins_dir = './plugins/'
         for file in os.listdir(plugins_dir):
             if file.endswith('_plugin.py'):
-                module_name = re.sub(file, "_plugin.py", "")
-                file_path = plugins_dir + file
+                module_name = re.sub("_plugin.py", "", file)
+                file_path = os.path.join(plugins_dir, file)
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module

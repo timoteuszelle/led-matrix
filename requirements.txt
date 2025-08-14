@@ -1,5 +1,5 @@
 pyserial
 numpy
-psutils
 psutil
+evdev
 pynput

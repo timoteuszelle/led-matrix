@@ -2,6 +2,28 @@
 
 This software is intended for use on a Framework 16 laptop with LED Matrix Panels installed. It's a clone of the [LED System Monitor](https://code.karsttech.com/jeremy/FW_LED_System_Monitor.git) project, with certain modifications and extensions applied.
 
+## Compatibility
+
+**Hardware:** Framework 16 laptops with LED Matrix Panels  
+**Operating Systems:** Linux distributions (Ubuntu, Fedora, NixOS, Debian, CentOS, RHEL, and others)  
+**Dependencies:** Python 3.7+ with numpy, psutil, pyserial, and evdev
+
+## Quick Start
+
+For most users, the fastest way to get started:
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd led-matrix-monitoring
+
+# Run with automatic dependency installation
+chmod +x run.sh
+./run.sh
+```
+
+The `run.sh` script will automatically detect your Linux distribution and install the required dependencies.
+
 ## Capabilities
 * Display system performance characteristics in real-time
   * CPU utilization
@@ -24,20 +46,118 @@ This software is intended for use on a Framework 16 laptop with LED Matrix Panel
  * Automatic device detection
  * Snapshot app
 ## Installation
-* Install [PyEnv](https://github.com/pyenv/pyenv)  
-* Any other python virtual environment package may be used. Commands below work with PyEnv.
+
+### Option 1: System Package Installation (Recommended)
+
+#### For Ubuntu/Debian users:
+```bash
+sudo apt update
+sudo apt install -y python3-numpy python3-psutil python3-serial python3-evdev
+cd led-matrix-monitoring
+python3 led_system_monitor.py
 ```
-cd led-matrix
+
+#### For Fedora users:
+```bash
+sudo dnf install -y python3-numpy python3-psutil python3-pyserial python3-evdev
+cd led-matrix-monitoring
+python3 led_system_monitor.py
+```
+
+#### For NixOS users:
+```bash
+# Using the Nix flake (recommended)
+nix run github:your-repo/led-matrix-monitoring
+
+# Or build locally
+nix build
+./result/bin/led-matrix-monitor
+```
+
+### Option 2: Python Virtual Environment
+* Install [PyEnv](https://github.com/pyenv/pyenv) or any other python virtual environment package
+* Commands below work with PyEnv:
+```bash
+cd led-matrix-monitoring
 pyenv install 3.11
-pyenv virtualenv 3.11 3.11
-pyenv activate
+pyenv virtualenv 3.11 led-matrix-env
+pyenv activate led-matrix-env
 pip install -r requirements.txt
 ```
-* If you want to run the code as a linux service, you need to install the python dependencies as the root user
-* ```ic
-  cd led-matrix
-  sudo pip install -r requirements.txt
-  ```
+
+## Required Permissions
+
+### LED Matrix Device Access
+
+By default, LED Matrix devices appear as serial devices (e.g., `/dev/ttyACM0`, `/dev/ttyACM1`) that are typically owned by root with restricted permissions. To allow your user to access these devices, you have several options:
+
+#### Option 1: Add User to dialout Group (Recommended)
+```bash
+# Add your user to the dialout group
+sudo usermod -a -G dialout $USER
+
+# Log out and log back in, or use:
+newgrp dialout
+
+# Verify group membership
+groups $USER
+```
+
+#### Option 2: Create Custom udev Rules
+Create a udev rule file to automatically set proper permissions:
+
+```bash
+# Create the udev rule file
+sudo tee /etc/udev/rules.d/99-framework-led-matrix.rules <<EOF
+# Framework 16 LED Matrix Input Modules
+SUBSYSTEM=="tty", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0020", MODE="0666", GROUP="dialout"
+EOF
+
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+#### Option 3: Run as Root (Not Recommended)
+While running as root will bypass permission issues, this is not recommended for security reasons:
+```bash
+sudo python3 led_system_monitor.py
+```
+
+### Keyboard Input Access (Optional)
+
+For the Alt+I keyboard shortcut feature to work, the application needs read access to keyboard input devices:
+
+```bash
+# Add user to input group (be aware of security implications)
+sudo usermod -a -G input $USER
+
+# Log out and log back in, then verify
+groups $USER
+```
+
+**Security Note:** Adding your user to the `input` group allows any program running as your user to potentially capture keystrokes. Consider the security implications before doing this, or use `--no-key-listener` to disable this feature.
+
+### Verifying Device Access
+
+To check if your LED Matrix devices are properly accessible:
+
+```bash
+# List LED Matrix devices
+ls -la /dev/ttyACM*
+
+# Check if they're accessible by your user
+python3 -c "from serial.tools import list_ports; [print(f'{p.device}: {p.description}') for p in list_ports.comports() if 'LED Matrix' in str(p)]"
+```
+
+### Linux Service Dependencies
+
+If you want to run the code as a Linux service, you need to install the python dependencies as the root user:
+```bash
+cd led-matrix
+sudo pip install -r requirements.txt
+```
 ## Run
 ```
 cd led-matrix
