@@ -3,7 +3,9 @@ chmod +x run.sh
 dsp=$DISPLAY
 args="$*"
 rm -f fwledmonitor.service || true
-sed -i "s#led_system_monitor.py.*\$#led_system_monitor.py ${args}#" run.sh
+if [[ ! -z "$args" ]];then
+    sed -i "s#led_system_monitor.py.*\$#led_system_monitor.py ${args}#" run.sh
+fi
 cat <<EOF >>./fwledmonitor.service
 [Unit]
 Description=Framework 16 LED System Monitor
@@ -14,7 +16,7 @@ Environment=DISPLAY=${dsp}
 Type=simple
 Restart=always
 WorkingDirectory=$PWD
-ExecStart=sh -c "'$PWD/run.sh'"
+ExecStart=sh -c ./run.sh
 
 [Install]
 WantedBy=default.target
