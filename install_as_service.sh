@@ -12,11 +12,11 @@ Description=Framework 16 LED System Monitor
 After=network.service
 
 [Service]
-Environment=DISPLAY=${dsp}
+Environment=DISPLAY=${dsp} XAUTHORITY=${XAUTHORITY}
 Type=simple
 Restart=always
 WorkingDirectory=$PWD
-ExecStart=sh -c ./run.sh
+ExecStart=sh -c $PWD/run.sh
 
 [Install]
 WantedBy=default.target
