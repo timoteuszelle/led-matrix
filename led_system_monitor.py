@@ -150,6 +150,11 @@ def main(args):
             screen_brightness = get_monitor_brightness()
             background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
             foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+
+            # Clamp brightness values to the valid byte range
+            background_value = max(0, min(255, background_value))
+            foreground_value = max(0, min(255, foreground_value))
+
             grid = np.zeros((9,34), dtype = int)
             active_keys = device.active_keys(verbose=True) if device else []
             if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys and not args.no_key_listener:

@@ -192,8 +192,10 @@ def draw_ids_right(grid, top_right, bot_right, fill_value):
     grid[1:8, 18:-1] = fill_grid_bot * fill_value
 
 def draw_to_LEDs(s, grid):
-    for i in range(grid.shape[0]):
-        params = bytearray([i]) + bytearray(grid[i, :].tolist())
+    # Ensure all values are valid bytes before sending
+    safe_grid = np.clip(grid, 0, 255).astype(np.uint8)
+    for i in range(safe_grid.shape[0]):
+        params = bytearray([i]) + bytearray(safe_grid[i, :].tolist())
         send_command(s, Commands.StageCol, parameters=params)
     send_command(s, Commands.FlushCols)
 
