@@ -13,6 +13,24 @@ MAX_FAN_SPEED = 6_000
 if os.name == 'nt':
     import wmi
 
+
+def _read_backlight_ratio(device):
+    """Return a normalized brightness in [0.0, 1.0] for the given backlight device."""
+    with open(f'/sys/class/backlight/{device}/max_brightness', 'r') as f:
+        max_b = int(f.read())
+    with open(f'/sys/class/backlight/{device}/brightness', 'r') as f:
+        b = int(f.read())
+
+    if max_b <= 0:
+        return 1.0
+
+    r = b / max_b
+    if r < 0.0:
+        return 0.0
+    if r > 1.0:
+        return 1.0
+    return r
+
 class DiskMonitor:
     def __init__(self, hysterisis_time = 20):
         self.read_usage_history = [0]
@@ -107,6 +125,7 @@ class CPUMonitor:
                     self.history_times = self.history_times[-self.max_history_size:]
             cpu_percentages = [sum(core_history) / self.max_history_size for core_history in self.cpu_usage_history]
             # Somehow cpu_percentages can have values greater than 1 so we clamp them
+            cpu_percentages = [min(1.0, max(0.0, v)) for v in cpu_percentages]
             return cpu_percentages
         except Exception as e:
             print(f"Error in CPUMonitor.get(): {e}")
@@ -136,11 +155,13 @@ def get_monitor_brightness():
         if os.name == 'nt':
             return wmi.WMI(namespace='wmi').WmiMonitorBrightness()[0].CurrentBrightness / 100.0
         else:
-            try: # First try the dGPU brightness
-                return int(open('/sys/class/backlight/amdgpu_bl2/brightness', 'r').read()) / 255.0
-            except: # If that doesn't work, try the iGPU brightness
-                return int(open('/sys/class/backlight/amdgpu_bl1/brightness', 'r').read()) / 255.0
-    except Exception as e:
+            # On Linux, use max_brightness to normalize into [0.0, 1.0]
+            try:
+                return _read_backlight_ratio('amdgpu_bl2')
+            except Exception:
+                return _read_backlight_ratio('amdgpu_bl1')
+    except Exception:
+        # Reasonable default if anything goes wrong
         return 1.0
 
 if __name__ == "__main__":

@@ -187,6 +187,11 @@ def main(args):
                 screen_brightness = get_monitor_brightness()
                 background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
                 foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+
+                # Clamp brightness values to the valid byte range
+                background_value = max(0, min(255, background_value))
+                foreground_value = max(0, min(255, foreground_value))
+
                 grid = np.zeros((9,34), dtype = int)
                 
                 # Check for key combo using both evdev (if available) and pynput
