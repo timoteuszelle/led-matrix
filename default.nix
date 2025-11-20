@@ -6,7 +6,7 @@
 
 python3.pkgs.buildPythonApplication rec {
   pname = "led-matrix-monitoring";
-  version = "1.1.0";
+  version = "1.1.1";
   format = "other";
 
   src = ./.;
