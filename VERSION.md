@@ -1,9 +1,9 @@
 # Version Information
 
 ## Current Version
-- **Version**: 1.1.0
-- **Branch**: fix/robustness-and-permission-handling
-- **Latest Commit**: 39344ccceceb81e08c6ec162fad871cd06080948
+- **Version**: 1.1.1
+- **Branch**: main
+- **Latest Commit**: c609efc2805484a23274845e13082d67f642e6e0
 
 ## Usage with specific commit
 
@@ -17,6 +17,16 @@ led-matrix-monitoring = {
 ```
 
 ## Changelog
+
+### v1.1.1 (2025-11-20)
+- **Robustness Fixes**:
+  - Fixed brightness scaling to properly use `max_brightness` from sysfs backlight devices
+  - Added clamping of brightness values to valid byte range [0, 255] to prevent overflow errors
+  - Added safe byte conversion in LED drawing to prevent invalid values being sent to hardware
+  - Clamped CPU percentage values to [0.0, 1.0] range to handle edge cases
+- **Stability Improvements**:
+  - Better handling of brightness calculation edge cases
+  - More robust LED matrix value validation before hardware transmission
 
 ### v1.1.0 (2025-08-13)
 - **Major Features**:
