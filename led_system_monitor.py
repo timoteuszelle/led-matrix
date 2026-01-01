@@ -30,7 +30,8 @@ def discover_led_devices():
         for device in device_list:
             if 'LED Matrix Input Module' in str(device):
                 locations.append((device.location, device.device))
-        #location is of form: <bus>-<port>[-<port>]… port is of form x.y:n.m
+        #location is of form: <bus>-<port>[-<port>]  (port is of form x.y:n.m)
+        # Example: 1-3.3:1.0 (right device) , 1-3.2:1.0 (left device)
         # Sort by y:n.m to get the devices in left-right order
         return sorted(locations, key = lambda x: re.sub(r'^\d+\-\d+\.', '', x[0]))
     except Exception as e:
@@ -302,8 +303,8 @@ if __name__ == "__main__":
                          help="Metrics to display in the bottom section of the left matrix panel")
     addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=app_names,
                          help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("--bottom-right", "-br", type=str, default="disk", choices=app_names,
-                         help="Metrics to display in the top section of the right matrix panel")
+    addGroup.add_argument("--bottom-right", "-br", type=str, default="net", choices=app_names,
+                         help="Metrics to display in the bottom section of the right matrix panel")
     addGroup.add_argument("--left-snap", "-ls", type=str, default=None,
                          help="Snapshot file to display on the left panel. Specify * to cycle through all files in the snapshot dir")
     addGroup.add_argument("--right-snap", "-rs", type=str, default=None,

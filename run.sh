@@ -25,4 +25,4 @@ fi
 xhost +local:root 2>/dev/null || true
 
 echo "Starting LED Matrix Monitor..."
-python3 ./led_system_monitor.py -tr temp -br fan "$@"
+python3 ./led_system_monitor.py -tr temp -br fan
