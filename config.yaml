@@ -4,29 +4,31 @@ quadrants:
     interval: 10
     apps:
       - cpu
-      - app-with-args:
-          name: snap
-          args:
-            - the-way-left.json
-            - snapshot_files/left
-            - left
+      # - app-with-args:
+      #     name: snap
+      #     args:
+      #       - the-way-left.json
+      #       - snapshot_files/left
+      #       - left
   top-right:
-    interval: 10
+    interval: 300
     apps:
       - temp
-      - app-with-args:
-          name: snap
-          args:
-            - the-way-right.json
-            - snapshot_files/right
-            - right
+      - disk
+      # - app-with-args:
+      #     name: snap
+      #     args:
+      #       - the-way-right.json
+      #       - snapshot_files/right
+      #       - right
   bottom-right:
-    interval: 10
+    interval: 300
     apps:
       - fan
-      - none
+      - net
+      # - none
   bottom-left:
     interval: 10
     apps:
       - mem-bat
-      - none
+      # - none

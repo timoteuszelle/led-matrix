@@ -69,7 +69,6 @@ def main(args):
         top_right.get('interval', interval),
         bottom_right.get('interval', interval)
     ]
-    app_counts = [len(top_left['apps']), len(bottom_left['apps']), len(top_right['apps']), len(bottom_right['apps'])]
     app_indices = [0, 0, 0, 0] #[top-left, bottom-left, top-right, bottom-right]
     
     led_devices = discover_led_devices()
