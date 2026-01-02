@@ -1,0 +1,32 @@
+interval: 30
+quadrants:
+  top-left:
+    interval: 10
+    apps:
+      - cpu
+      - app-with-args:
+          name: snap
+          args:
+            - the-way-left.json
+            - snapshot_files/left
+            - left
+  top-right:
+    interval: 10
+    apps:
+      - temp
+      - app-with-args:
+          name: snap
+          args:
+            - the-way-right.json
+            - snapshot_files/right
+            - right
+  bottom-right:
+    interval: 10
+    apps:
+      - fan
+      - none
+  bottom-left:
+    interval: 10
+    apps:
+      - mem-bat
+      - none

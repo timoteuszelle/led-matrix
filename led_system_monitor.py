@@ -16,12 +16,17 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 # External Dependencies
 import numpy as np
 import evdev
+from yaml import safe_load
 from pynput.keyboard import Key, Listener
 from serial.tools import list_ports
 
 
 KEY_I = ('KEY_I', 23)
 MODIFIER_KEYS = [('KEY_RIGHTALT', 100), ('KEY_LEFTALT', 56)]
+
+def get_config():
+    with open('./config.yaml', 'r') as f:
+       return safe_load(f)
 
 def discover_led_devices():
     locations = []
@@ -44,7 +49,7 @@ def main(args):
     global device
     if not args.no_key_listener:
         try:
-            device = evdev.InputDevice('/dev/input/event7')
+            device = evdev.InputDevice('/dev/input/event9')
         except (PermissionError, FileNotFoundError, OSError) as e:
             print(f"Warning: Cannot access keyboard device for key listening: {e}")
             print("Key listener will be disabled. Use --no-key-listener to suppress this warning.")
@@ -52,6 +57,20 @@ def main(args):
             device = None
     else:
         device = None
+
+    config = get_config()
+    interval = config['interval']
+    quads = config['quadrants']
+    top_left, top_right, bottom_right, bottom_left = \
+        quads['top-left'], quads['top-right'], quads['bottom-right'], quads['bottom-left']
+    app_intervals = [
+        top_left.get('interval', interval),
+        bottom_left.get('interval', interval),
+        top_right.get('interval', interval),
+        bottom_right.get('interval', interval)
+    ]
+    app_counts = [len(top_left['apps']), len(bottom_left['apps']), len(top_right['apps']), len(bottom_right['apps'])]
+    app_indices = [0, 0, 0, 0] #[top-left, bottom-left, top-right, bottom-right]
     
     led_devices = discover_led_devices()
     if not len(led_devices):
@@ -59,13 +78,12 @@ def main(args):
         sys.exit(0)
     elif len(led_devices) == 1:
         print(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
-        args.top_right = args.bottom_right = "none"
     else:
         print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
     drawing_queues = []
     
-    # Track key presses to reveal metrics ID in each panel section
+    # Track key presses to reveal metrics ID in each panel sectionListener
     global alt_pressed
     alt_pressed = False
     global i_pressed
@@ -83,7 +101,7 @@ def main(args):
     disk_monitor = DiskMonitor()
     network_monitor = NetworkMonitor()
 
-    # Setuop left panel drawing queue
+    # Setup left panel drawing queue
     left_drawing_queue = queue.Queue(2)
     left_drawing_thread = DrawingThread(locations[0], left_drawing_queue)
     left_drawing_thread.start()    
@@ -116,8 +134,8 @@ def main(args):
         draw_app(arg, grid, last_network_upload, foreground_value, bar_x_offset=1, y=idx)
         draw_app(arg, grid, last_network_download, foreground_value, bar_x_offset=5, y=idx)
         
-    def draw_snap(grid, foreground_value, file, snap_path, panel):
-        draw_app("snap", grid, foreground_value, file, snap_path, panel)    
+    def draw_snap(arg, grid, foreground_value, idx, file, snap_path, panel):
+        draw_app(arg, grid, foreground_value, file, snap_path, panel)    
         
     app_functions = {
         "cpu": draw_cpu,
@@ -131,6 +149,7 @@ def main(args):
     def on_press(key):
         global alt_pressed
         global i_pressed
+        print("key pressed")
         if type(key).__name__ == 'KeyCode':
             if key.char == 'i':
                 i_pressed = True
@@ -171,101 +190,113 @@ def main(args):
                     app_functions[obj["name"]] = obj["fn"]
     #################################################
     
-    # Snapshot duration validation
-    if hasattr(args, 'snapshot_duration') and hasattr(args, 'snapshot_interval'):
-        if args.snapshot_duration > args.snapshot_interval:
-            print("Snapshot duration must be less than snapshot interval. Exiting...")
-            sys.exit(0)
-    
     # Use pynput Listener for cross-platform compatibility, but fallback to evdev if available
-    with Listener(
-        on_press=on_press,
-        on_release=on_release):
-        while True:
-            elapsed_time = time.time()
-            show_snapshot = True if not hasattr(args, 'snapshot_interval') or args.snapshot_interval == 0 or elapsed_time % args.snapshot_interval <= getattr(args, 'snapshot_duration', 0) else False
-            try:
-                screen_brightness = get_monitor_brightness()
-                background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
-                foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+    # Pynput stopped working on linux for unknonwn reason. Perhaps because wayland
+    listener = Listener(on_press=on_press, on_release=on_release)
+    listener.start()
+    base_time = [time.monotonic(), time.monotonic(), time.monotonic(), time.monotonic()]
+    while True:
+        try:
+            screen_brightness = get_monitor_brightness()
+            background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
+            foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
 
-                # Clamp brightness values to the valid byte range
-                background_value = max(0, min(255, background_value))
-                foreground_value = max(0, min(255, foreground_value))
+            # Clamp brightness values to the valid byte range
+            background_value = max(0, min(255, background_value))
+            foreground_value = max(0, min(255, foreground_value))
 
-                grid = np.zeros((9,34), dtype = int)
-                
-                # Check for key combo using both evdev (if available) and pynput
-                active_keys = device.active_keys(verbose=True) if device else []
-                evdev_key_pressed = (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys if device else False
-                pynput_key_pressed = i_pressed and alt_pressed
-                key_combo_active = (evdev_key_pressed or pynput_key_pressed) and not args.no_key_listener
-                
-                if key_combo_active:
-                    # Show app IDs for both panels
-                    if hasattr(args, 'left_snap') and args.left_snap and show_snapshot:
-                        draw_id(grid, "snap", foreground_value)
-                    else:
-                        draw_outline_border(grid, background_value)
-                        draw_ids(grid, args.top_left, args.bottom_left, foreground_value)
-                    left_drawing_queue.put(grid)
-                    
-                    if len(drawing_queues) > 1:  # Right panel exists
-                        grid = np.zeros((9,34), dtype = int)
-                        if hasattr(args, 'right_snap') and args.right_snap and show_snapshot:
-                            draw_id(grid, "snap", foreground_value)
-                        else:
-                            draw_outline_border(grid, background_value)
-                            draw_ids(grid, args.top_right, args.bottom_right, foreground_value)
-                        right_drawing_queue.put(grid)
-                    time.sleep(0.1)
-                    continue
-
-                # Draw by half or whole panel, depending on program args
-                for i, draw_queue in enumerate(drawing_queues):
-                    grid = np.zeros((9,34), dtype = int)
-                    if i == 0:
-                        panel = 'left'
-                        if hasattr(args, 'left_snap') and args.left_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.left_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'left')
-                            draw_queue.put(grid)
-                            continue
-                        else:
-                            _args = [args.top_left, args.bottom_left]
-                    else:
-                        panel = 'right'
-                        if hasattr(args, 'right_snap') and args.right_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.right_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'right')
-                            draw_queue.put(grid)
-                            continue
-                        _args = [args.top_right, args.bottom_right]
-                    
-                    for j, arg in enumerate(_args):
-                        if j == 0:
-                            idx = 0
-                            loc = 'top'
-                        else:
-                            idx = 16
-                            loc = 'bottom'
-                        try:
-                            func = app_functions[arg]
-                            func(arg, grid, foreground_value, idx)
-                        except KeyError:
-                            print(f"Unrecognized display option {arg} for {loc} {panel}")
-                        if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
-                        draw_app_border(arg, grid, background_value, idx)
-                    draw_queue.put(grid)
-                    
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                import traceback
-                print(f"Error in main loop: {e}")
-                traceback.print_exc()
-                time.sleep(1.0)
-            time.sleep(0.1)
+            grid = np.zeros((9,34), dtype = int)
             
-        print("Exiting")
+            # Check for key combo using both evdev (if available) and pynput
+            active_keys = device.active_keys(verbose=True) if device else []
+            # print(active_keys)
+            evdev_key_pressed = True if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys and device else False
+            pynput_key_pressed = i_pressed and alt_pressed
+            key_combo_active = (evdev_key_pressed or pynput_key_pressed) and not args.no_key_listener
+
+            # Draw by half or whole panel, depending on program args
+            if time.monotonic() - base_time[0] >= app_intervals[0]:
+                app_indices[0] = (app_indices[0] + 1) % len(top_left['apps'])
+                base_time[0] = time.monotonic()
+            if time.monotonic() - base_time[1] >= app_intervals[1]:
+                app_indices[1] = (app_indices[1] + 1) % len(bottom_left['apps'])
+                base_time[1] = time.monotonic()
+            if time.monotonic() - base_time[2] >= app_intervals[2]:
+                app_indices[2] = (app_indices[2] + 1) % len(top_right['apps'])
+                base_time[2] = time.monotonic()
+            if time.monotonic() - base_time[3] >= app_intervals[3]:
+                app_indices[3] = (app_indices[3] + 1) % len(bottom_right['apps'])
+                base_time[3] = time.monotonic()
+
+            left_args = [
+                top_left['apps'][app_indices[0]],
+                bottom_left['apps'][app_indices[1]],
+            ]
+
+            right_args = [
+                top_right['apps'][app_indices[2]],
+                bottom_right['apps'][app_indices[3]]
+            ]
+            
+            if key_combo_active:
+                # Show app IDs for both panels
+                draw_outline_border(grid, background_value)
+                if type(left_args[0]) is dict:
+                    draw_id(grid, left_args[0].get("app-with-args", {}).get("name", None), foreground_value)
+                else:
+                    draw_ids(grid, left_args[0], left_args[1], foreground_value)
+                left_drawing_queue.put(grid)
+                
+                if len(drawing_queues) > 1:  # Right panel exists
+                    grid = np.zeros((9,34), dtype = int)
+                    draw_outline_border(grid, background_value)
+                    if type(right_args[0]) is dict:
+                        draw_id(grid, right_args[0].get("app-with-args", {}).get("name", None), foreground_value)
+                    else:
+                        draw_ids(grid, right_args[0], right_args[1], foreground_value)
+                    right_drawing_queue.put(grid)
+                time.sleep(0.1)
+                continue
+
+            for i, draw_queue in enumerate(drawing_queues):
+                grid = np.zeros((9,34), dtype = int)
+                if i == 0:
+                    panel = 'left'
+                    _args = left_args
+                else:
+                    panel = 'right'
+                    _args = right_args
+                for j, arg in enumerate(_args):
+                    arg_name = arg['app-with-args']['name'] if type(arg) is dict else arg
+                    if arg_name == "none": continue
+                    if j == 0:
+                        idx = 0
+                        loc = 'top'
+                    else:
+                        idx = 16
+                        loc = 'bottom'
+                    try:
+                        func = app_functions[arg_name]
+                        func_args = [arg_name, grid, foreground_value, idx]
+                        if type(arg) is dict:
+                            func_args.extend(arg.get("app-with-args", {}).get("args", None))
+                        func(*func_args)
+                    except KeyError:
+                        print(f"Unrecognized display option {arg_name} for {loc} {panel}")
+                    if arg_name == 'mem-bat': arg_name = 'mem' # Single border draw for mem and bat together
+                    draw_app_border(arg_name, grid, background_value, idx)
+                draw_queue.put(grid)
+                
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            import traceback
+            print(f"Error in main loop: {e}")
+            traceback.print_exc()
+            time.sleep(1.0)
+        time.sleep(0.1)
+        
+    print("Exiting")
         
 if __name__ == "__main__":
     app_names = ["cpu", "net", "disk", "mem-bat", "none"]
@@ -296,39 +327,10 @@ if __name__ == "__main__":
     mode_group.add_argument("--help", "-h", action="help",
                          help="Show this help message and exit")
     
-    addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=app_names,
-                         help="Metrics to display in the top section of the left matrix panel")
-    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=app_names,
-                         help="Metrics to display in the bottom section of the left matrix panel")
-    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=app_names,
-                         help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("--bottom-right", "-br", type=str, default="net", choices=app_names,
-                         help="Metrics to display in the bottom section of the right matrix panel")
-    addGroup.add_argument("--left-snap", "-ls", type=str, default=None,
-                         help="Snapshot file to display on the left panel. Specify * to cycle through all files in the snapshot dir")
-    addGroup.add_argument("--right-snap", "-rs", type=str, default=None,
-                         help="Snapshot file to display on the right panel. Specify * to cycle through all files in the snapshot dir")
-    addGroup.add_argument("--snapshot-path", "-sp", type=str, default="snapshot_files",
-                          help="The file path that contains either the snapshot files that may be displayed on either panel or " +
-                          "'left' and 'right' directories that contain files that may be displayed on the respective panel")
-    addGroup.add_argument("--snapshot-interval", "-si", type=int, default=0,
-                          help="The interval (in seconds) at which the selected snapshot files will be rendered. A value " +
-                          "of zero means the snapshots should be rendered continuously")
-    addGroup.add_argument("--snapshot-duration", "-sd", type=int, default=0,
-                          help="The number of seconds that the snapshot file will be rendered at the specified interval. Must be " +
-                          "less than the value of --snapshot-interval")
-    
-    addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
-    addGroup.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
+    mode_group.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
+    mode_group.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
     
     args = parser.parse_args()
-    print(f"top left {args.top_left}")
-    print(f"bottom left {args.bottom_left}")
-    print(f"top right {args.top_right}")
-    print(f"bottom right {args.bottom_right}")
-    print(f"left snap {args.left_snap}")
-    print(f"right snap {args.right_snap}")
     if args.no_key_listener: print("Key listener disabled")
     
     main(args)

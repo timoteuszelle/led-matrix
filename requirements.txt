@@ -3,3 +3,4 @@ numpy
 psutil
 evdev
 pynput
+pyyaml
