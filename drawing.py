@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 # Internal Dependencies
-from commands import Commands, send_command
+from commands import Commands, send_command, do_animate
 from patterns import lightning_bolt_bot, lightning_bolt_top, lookup_table, id_patterns
 
 # External Dependencies
@@ -239,12 +239,21 @@ class DrawingThread(threading.Thread):
         self.port_location = port_location
         self.serial_port = init_device(self.port_location)
         self.input_queue = input_queue
+        self.animate_active= False
+
+    def set_animate(self, animate):
+        do_animate(self.serial_port, animate=animate)
     
     def run(self):
         while True:
             try:
-                grid = self.input_queue.get()
-                draw_to_LEDs(self.serial_port, grid)
+                grid, animate = self.input_queue.get()
+                if not self.animate_active:
+                    draw_to_LEDs(self.serial_port, grid)
+                if animate is not None:
+                    self.animate_active = animate
+                    do_animate(self.serial_port, animate)
+
             except Exception as e:
                 print(f"Error in DrawingThread: {e}")
                 del self.serial_port

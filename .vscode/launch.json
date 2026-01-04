@@ -12,8 +12,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": ["-tr", "mem-bat"]
+            "justMyCode": true
         }
     ]
 }

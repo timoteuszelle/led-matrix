@@ -1,2 +1,3 @@
 *.pyc
 fwledmonitor.service
+matrix_patterns
