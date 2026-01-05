@@ -11,7 +11,6 @@ from collections import defaultdict
 
 
 # Internal Dependencies
-import drawing
 from drawing import draw_outline_border, draw_ids, draw_id, draw_app, draw_app_border, DrawingThread
 from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, NetworkMonitor, get_monitor_brightness
 
@@ -19,7 +18,10 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 import numpy as np
 import evdev
 from yaml import safe_load
-from pynput.keyboard import Key, Listener
+try:
+    from pynput.keyboard import Key, Listener
+except:
+    print("Unable to use pynput key listener, defaulting to evdev (if supported)")
 from serial.tools import list_ports
 
 KEY_I = ('KEY_I', 23)
@@ -42,9 +44,23 @@ def discover_led_devices():
         return sorted(locations, key = lambda x: re.sub(r'^\d+\-\d+\.', '', x[0]))
     except Exception as e:
         print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
+
+def list_apps(base_apps, plugin_apps, quads):
+    max_len = max(map(lambda x: len(x), base_apps + plugin_apps))
+    print("Installed Apps:")
+    print("   " + "Name".ljust(max_len+3, ' ') + "Source".ljust(12, " ") + "Configuration")
+    configured_apps = {}
+    for quad in quads.values():
+        for app in quad:
+            del app["app"] # Just the list name in the yaml file, value will be set to None
+            configured_apps[app["name"]] = app
+    for app in [*base_apps , *plugin_apps]:
+        print(f"   {app.ljust(max_len+3, ' ')}", end='')
+        print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
+        print(f"{configured_apps[app]}" if app in configured_apps.keys() else "No Configuration")
         
 device = None
-def main(args):    
+def main(args, base_apps, plugin_apps):    
     # Initialize evdev device for key listening if not disabled
     global device
     if not args.no_key_listener:
@@ -78,6 +94,9 @@ def main(args):
         for app in quad[1]:
             app_duration[app["name"]] = int(app.get("duration", duration))
 
+    if args.list_apps:
+        list_apps(base_apps, plugin_apps, quads)
+        sys.exit()
 
     led_devices = discover_led_devices()
     if not len(led_devices):
@@ -338,9 +357,10 @@ def main(args):
     print("Exiting")
 
 if __name__ == "__main__":
-    app_names = ["cpu", "net", "disk", "mem-bat", "none"]
+    base_apps = ["cpu", "net", "disk", "mem-bat", "none"]
+    plugin_apps = []
     ###############################################################
-    ###  Load additional app names from plugins for arg parser  ###
+    ###  Load additional app names from plugins for listing insalled apps  ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
         # Try to find plugins directory - either in current dir or installed location
         import os.path
@@ -356,8 +376,7 @@ if __name__ == "__main__":
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
-
-                app_names += map(lambda o: o["name"], module.app_funcs)
+                plugin_apps += map(lambda o: o["name"], module.app_funcs)
     #################################################################
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
@@ -369,10 +388,11 @@ if __name__ == "__main__":
     mode_group.add_argument("-config-file", "-cf", type=str, default="./config.yaml", help="File that specifiees which apps to run in each panel quadrant")
     mode_group.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
     mode_group.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
+    mode_group.add_argument("--list-apps", "-la", action="store_true", help="List the installed apps, and exit")
     
     args = parser.parse_args()
     if args.no_key_listener: print("Key listener disabled")
     print(f"Using config file {args.config_file}")
     
-    main(args)
+    main(args, base_apps, plugin_apps)
 
