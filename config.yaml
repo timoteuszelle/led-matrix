@@ -7,7 +7,7 @@ quadrants:
   top-left:
   - app:
     name: cpu
-    duration: 10
+    duration: 300
     animate: false
   # Use this pattern for apps with args. Change only the args values
   - app:
@@ -17,26 +17,26 @@ quadrants:
     animate: true
     # Snapshot args: file name, file path, panel
     args:
-      - the-way-left.json
+      - zigzag.json
       - snapshot_files/left
       - left
   top-right:
   - app:
     name: temp
-    duration: 10
+    duration: 300
     animate: false
   - app:
     name: snap
     animate: true
     duration: 5
     args:
-      - the-way-right.json
+      - every-third-row.json
       - snapshot_files/right
       - right
   bottom-right:
   - app:
     name: fan
-    duration: 10
+    duration: 300
     animate: false
   # Keep thhe quadrant blank in this time slot. Used in conjunction with an app
   # in the top quadrant that fills the entire panel, e.g. the snapshot (snap) app
@@ -47,7 +47,7 @@ quadrants:
   bottom-left:
   - app:
     name: mem-bat
-    duration: 10
+    duration: 300
     animate: false
   - app:
     name: none
