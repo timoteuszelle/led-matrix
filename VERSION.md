@@ -1,9 +1,9 @@
 # Version Information
 
 ## Current Version
-- **Version**: 1.1.1
+- **Version**: 1.2.0
 - **Branch**: main
-- **Latest Commit**: c609efc2805484a23274845e13082d67f642e6e0
+- **Latest Commit**: TBD (see git log)
 
 ## Usage with specific commit
 
@@ -17,6 +17,28 @@ led-matrix-monitoring = {
 ```
 
 ## Changelog
+
+### v1.2.0 (2026-01-06)
+- **Wayland Support**:
+  - Made pynput import optional with graceful fallback to evdev-only mode
+  - Fixes compatibility with Ubuntu 24.04 LTS and other Wayland-based systems
+  - Added PYNPUT_AVAILABLE flag for runtime capability detection
+  - Informative messages about which keyboard input mode is active
+- **Keyboard Device Auto-Detection**:
+  - Automatic scanning of /dev/input/event* to find keyboard devices
+  - Validates devices have proper keyboard capabilities (letters + modifiers)
+  - Removes hardcoded event7 assumption that failed on many systems
+  - Helpful error messages with actionable fixes for permission issues
+  - Suggests adding user to 'input' group when needed
+- **Improved Robustness**:
+  - Refactored main loop into render_iteration() function for better code organization
+  - Multiple fallback layers: pynput → evdev → evdev-only → pynput-only
+  - Graceful degradation when keyboard monitoring unavailable
+  - Better error handling and user feedback
+- **Backwards Compatibility**:
+  - All existing functionality preserved when pynput is available
+  - No breaking changes to command-line interface
+  - Seamless upgrade path from previous versions
 
 ### v1.1.1 (2025-11-20)
 - **Robustness Fixes**:
