@@ -15,6 +15,7 @@ quadrants:
     duration: 5
     # If true, scroll entire panel
     animate: true
+    scope: panel
     # Snapshot args: file name, file path, panel
     args:
       - zigzag.json
@@ -25,10 +26,12 @@ quadrants:
     name: temp
     duration: 300
     animate: false
+    scope: quadrant
   - app:
     name: snap
     animate: true
     duration: 5
+    scope: panel
     args:
       - every-third-row.json
       - snapshot_files/right

@@ -285,8 +285,8 @@ def main(args, base_apps, plugin_apps):
             if key_combo_active:
                 # Show app IDs for each quadrant or panel
                 draw_outline_border(grid, background_value)
-                #Snapshot app displays on the entire panel, so we draw the ID border differently
-                if left_args[0]['name'] == 'snap':
+                #If app takes up entire panel, we draw the ID border differently
+                if left_args[0].get("scope", None) == "panel":
                     draw_id(grid, left_args[0]['name'], foreground_value)
                 else:
                     draw_ids(grid, left_args[0]['name'], left_args[1]['name'], foreground_value)
@@ -295,7 +295,7 @@ def main(args, base_apps, plugin_apps):
                 if len(drawing_queues) > 1:  # Right panel exists
                     grid = np.zeros((9,34), dtype = int)
                     draw_outline_border(grid, background_value)
-                    if right_args[0]['name'] == 'snap':
+                    if right_args[0].get("scope", None) == "panel":
                         draw_id(grid, right_args[0]['name'], foreground_value)
                     else:
                         draw_ids(grid, right_args[0]['name'], right_args[1]['name'], foreground_value)
