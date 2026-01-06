@@ -3,7 +3,7 @@
 ## Current Version
 - **Version**: 1.2.0
 - **Branch**: main
-- **Latest Commit**: TBD (see git log)
+- **Latest Commit**: 812024c74f5b7de9a2009181e0db6419a2da243f
 
 ## Usage with specific commit
 
