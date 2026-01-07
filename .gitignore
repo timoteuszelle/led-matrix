@@ -3,3 +3,9 @@ fwledmonitor.service
 matrix_patterns
 build
 dist
+
+# Icon renderer test files
+test_*.png
+test_*.json
+test_icons/
+test_slide/
