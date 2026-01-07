@@ -1,3 +1,5 @@
 *.pyc
 fwledmonitor.service
 matrix_patterns
+build
+dist

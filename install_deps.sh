@@ -20,9 +20,3 @@ else
     echo "  - python3-pynput"
     echo ""
 fi
-
-# Set up X11 access for GUI features if running as root/service
-xhost +local:root 2>/dev/null || true
-
-echo "Starting LED Matrix Monitor..."
-python3 ./led_system_monitor.py

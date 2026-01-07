@@ -4,3 +4,4 @@ psutil
 evdev
 pynput
 pyyaml
+pyinstaller

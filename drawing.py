@@ -7,6 +7,7 @@ import sys
 import os
 import re
 import json
+import logging
 from pathlib import Path
 
 # Internal Dependencies
@@ -17,6 +18,8 @@ from patterns import lightning_bolt_bot, lightning_bolt_top, lookup_table, id_pa
 import numpy as np
 import serial # pyserial
 from serial.tools import list_ports
+
+log = logging.getLogger(__name__)
 
 # Correct table orientation for visual orientation when drawn
 for i in range(lookup_table.shape[0]):
@@ -95,6 +98,8 @@ def draw_bar(grid, bar_ratio, bar_value, bar_x_offset = 1, y=0):
 warned = set()
 def draw_snapshot(grid, fill_value, file, path, panel):
     global warned
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(current_dir, path)
     subdirs = [ f.name for f in os.scandir(path) if f.is_dir() and f.name in ['left', 'right']]
     subdir = panel if panel in subdirs else ''
     try:

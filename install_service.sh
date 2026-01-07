@@ -1,0 +1,40 @@
+#!/bin/bash
+set -x
+dsp=$DISPLAY
+args="$*"
+sudo rm -f /etc/systemd/system/fwledmonitor.service
+sudo tee /etc/systemd/system/fwledmonitor.service > /dev/null <<EOF
+[Unit]
+Description=Framework 16 LED System Monitor
+After=network.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=led_mon
+Group=led_mon
+Environment=DISPLAY=${dsp} XAUTHORITY=${XAUTHORITY} LOG_LEVEL=debug
+Restart=always
+ExecStartPre=/usr/bin/xhost +local:led_mon
+ExecStart=/usr/local/bin/led_mon
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+
+if ! id -u "led_mon" &>/dev/null 2>&1; then
+    sudo useradd   --system   --home /var/lib/led_mon  -G input -G dialout --shell /usr/sbin/nologin   led_mon
+fi
+
+sudo mkdir -p /opt/led_mon
+sudo chown -R root /opt/led_mon
+sudo chmod -R 755 /opt/led_mon
+sudo rm -rf /opt/led_mon/*
+sudo cp -r ./dist/led_mon/* /opt/led_mon/
+sudo ln -sf /opt/led_mon/led_mon /usr/local/bin/led_mon
+sudo systemctl daemon-reload
+sudo systemctl stop fwledmonitor.service
+sudo systemctl enable --now fwledmonitor.service

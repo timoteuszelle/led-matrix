@@ -8,6 +8,9 @@ import importlib.util
 import sys
 import os
 from collections import defaultdict
+import logging
+
+log = logging.getLogger(__name__)
 
 
 # Internal Dependencies
@@ -18,16 +21,40 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 import numpy as np
 import evdev
 from yaml import safe_load
+# Optional cross-platform keyboard input; on some Linux Wayland setups this may be unavailable
 try:
     from pynput.keyboard import Key, Listener
-except:
-    print("Unable to use pynput key listener, defaulting to evdev (if supported)")
+    PYNPUT_AVAILABLE = True
+except Exception:
+    Key = None
+    Listener = None
+    PYNPUT_AVAILABLE = False
 from serial.tools import list_ports
 
 KEY_I = ('KEY_I', 23)
 MODIFIER_KEYS = [('KEY_RIGHTALT', 100), ('KEY_LEFTALT', 56)]
 
+def find_keyboard_device():
+    """Auto-detect keyboard input device from /dev/input/event*"""
+    try:
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        for device in devices:
+            # Look for devices with keyboard capabilities (EV_KEY with standard keys)
+            capabilities = device.capabilities(verbose=False)
+            if evdev.ecodes.EV_KEY in capabilities:
+                keys = capabilities[evdev.ecodes.EV_KEY]
+                # Check if device has typical keyboard keys (letters and modifiers)
+                has_letters = any(k in keys for k in range(evdev.ecodes.KEY_Q, evdev.ecodes.KEY_P + 1))
+                has_modifiers = any(k in keys for k in [evdev.ecodes.KEY_LEFTALT, evdev.ecodes.KEY_RIGHTALT])
+                if has_letters and has_modifiers:
+                    return device.path
+    except Exception as e:
+        log.warn(f"Warning: Could not auto-detect keyboard device: {e}")
+    return None
+
 def get_config(config_file):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_file = os.path.join(current_dir, config_file)
     with open(config_file, 'r') as f:
        return safe_load(f)
 
@@ -43,36 +70,48 @@ def discover_led_devices():
         # Sort by y:n.m to get the devices in left-right order
         return sorted(locations, key = lambda x: re.sub(r'^\d+\-\d+\.', '', x[0]))
     except Exception as e:
-        print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
+        log.error(f"An Exception occured while tring to locate LED Matrix devices. {e}")
 
 def list_apps(base_apps, plugin_apps, quads):
     max_len = max(map(lambda x: len(x), base_apps + plugin_apps))
     print("Installed Apps:")
     print("   " + "Name".ljust(max_len+3, ' ') + "Source".ljust(12, " ") + "Configuration")
-    configured_apps = {}
+    configured_apps = defaultdict(list)
     for quad in quads.values():
         for app in quad:
             del app["app"] # Just the list name in the yaml file, value will be set to None
-            configured_apps[app["name"]] = app
+            configured_apps[app["name"]].append(app)
     for app in [*base_apps , *plugin_apps]:
-        print(f"   {app.ljust(max_len+3, ' ')}", end='')
-        print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
-        print(f"{configured_apps[app]}" if app in configured_apps.keys() else "No Configuration")
+        if not app in configured_apps:
+            print(f"   {app.ljust(max_len+3, ' ')}", end='')
+            print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
+            print(f"None")
+        for _app in configured_apps[app]:
+            print(f"   {app.ljust(max_len+3, ' ')}", end='')
+            print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
+            print(f"{_app}")
         
 device = None
-def main(args, base_apps, plugin_apps):    
+def app(args, base_apps, plugin_apps):    
     # Initialize evdev device for key listening if not disabled
     global device
     if not args.no_key_listener:
-        try:
-            device = evdev.InputDevice('/dev/input/event9')
-        except (PermissionError, FileNotFoundError, OSError) as e:
-            print(f"Warning: Cannot access keyboard device for key listening: {e}")
-            print("Key listener will be disabled. Use --no-key-listener to suppress this warning.")
-            args.no_key_listener = True
+        # Try to auto-detect keyboard device first
+        kbd_path = find_keyboard_device()
+        if kbd_path:
+            try:
+                device = evdev.InputDevice(kbd_path)
+                log.info(f"Using keyboard device: {kbd_path}")
+            except (PermissionError, FileNotFoundError, OSError) as e:
+                log.warn(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
+                log.warn("Try running: sudo usermod -a -G input $USER (then log out and back in)")
+                log.warn("Or use --no-key-listener to disable keyboard monitoring.")
+                args.no_key_listener = True
+                device = None
+        else:
+            log.warn("Warning: Could not find a suitable keyboard device for evdev monitoring.")
+            log.warn("Key listening will be limited to pynput only (if available).")
             device = None
-    else:
-        device = None
 
     ################################################################################
     ### Parse config file to enable control of apps by quadrant and by time slice ##
@@ -100,12 +139,12 @@ def main(args, base_apps, plugin_apps):
 
     led_devices = discover_led_devices()
     if not len(led_devices):
-        print("No LED devices found")
+        log.error("No LED devices found")
         sys.exit(0)
     elif len(led_devices) == 1:
-        print(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
+        log.warn(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
     else:
-        print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
+        log.info(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
     drawing_queues = []
     
@@ -175,25 +214,33 @@ def main(args, base_apps, plugin_apps):
     }
     
     def on_press(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
+        global alt_pressed, i_pressed
+        # If pynput is unavailable, this callback will not be used; guard anyway
+        if not PYNPUT_AVAILABLE:
+            return
+        try:
+            if getattr(key, 'char', None) == 'i':
                 i_pressed = True
-        elif key == Key.alt:
-            alt_pressed = True
+            elif Key is not None and key == Key.alt:
+                alt_pressed = True
+        except Exception:
+            # Be defensive; ignore unexpected pynput key objects
+            pass
 
     def on_release(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
+        global alt_pressed, i_pressed
+        if not PYNPUT_AVAILABLE:
+            return
+        try:
+            if getattr(key, 'char', None) == 'i':
                 i_pressed = False
-        elif key == Key.alt:
-            alt_pressed = False
-        if key == Key.esc:
-            # Stop listener
-            return False
+            elif Key is not None and key == Key.alt:
+                alt_pressed = False
+            if Key is not None and key == Key.esc:
+                # Stop listener
+                return False
+        except Exception:
+            pass
         
     #################################################
     ###      Load app functions from plugins      ###
@@ -218,10 +265,6 @@ def main(args, base_apps, plugin_apps):
                     app_functions[obj["name"]] = obj["fn"]
 
 
-    # Use pynput Listener for cross-platform compatibility, but fallback to evdev if available
-    # Pynput stopped working on linux for unknonwn reason. Perhaps because wayland
-    listener = Listener(on_press=on_press, on_release=on_release)
-    listener.start()
     # Track last draw time, to enable cycling through them for each quadrannt
     base_time_map = {
         # Each dict stores last draw time for each app
@@ -232,9 +275,10 @@ def main(args, base_apps, plugin_apps):
     }
 
     # Used to detect that the key listener was activated, for restoring anination mode after ID display
+    global latch_key_combo
     latch_key_combo = False
-    # Main loop: Displays selected apps per quadrant and applies animation as configured
-    while True:
+    def render_iteration():
+        global latch_key_combo
         try:
             screen_brightness = get_monitor_brightness()
             background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
@@ -302,7 +346,7 @@ def main(args, base_apps, plugin_apps):
                     right_drawing_queue.put((grid, False))
                 time.sleep(0.1)
                 latch_key_combo = True
-                continue
+                return
             
             for i, draw_queue in enumerate(drawing_queues):
                 grid = np.zeros((9,34), dtype = int)
@@ -329,7 +373,7 @@ def main(args, base_apps, plugin_apps):
                         func(*func_args)
                         animate = arg.get("animate", False)
                     except KeyError:
-                        print(f"Unrecognized display option {arg_name} for {loc} {panel}")
+                        log.error(f"Unrecognized display option {arg_name} for {loc} {panel}")
                     # Single border draw for mem and bat together
                     if arg_name == 'mem-bat': arg_name = 'mem'
                     draw_app_border(arg_name, grid, background_value, idx)
@@ -343,21 +387,37 @@ def main(args, base_apps, plugin_apps):
                         do_animate = True
                 draw_queue.put((grid, do_animate))
             latch_key_combo = False
-                
-                
+            time.sleep(0.1)     
         except KeyboardInterrupt:
-            break
+            raise
         except Exception as e:
             import traceback
-            print(f"Error in main loop: {e}")
+            log.error(f"Error in main loop: {e}")
             traceback.print_exc()
             time.sleep(1.0)
-        time.sleep(0.1)
-        
-    print("Exiting")
+            
+    # Informative message if pynput is not available
+    if not PYNPUT_AVAILABLE and not args.no_key_listener:
+        log.warn("Info: pynput is unavailable; running in evdev-only mode. Use Ctrl+C to exit.")
 
-if __name__ == "__main__":
-    base_apps = ["cpu", "net", "disk", "mem-bat", "none"]
+    # Prefer pynput if available; fall back silently if it fails to start (common on Wayland)
+    if PYNPUT_AVAILABLE and not args.no_key_listener:
+        try:
+            with Listener(on_press=on_press, on_release=on_release):
+                while True:
+                    render_iteration()
+        except Exception as e:
+            log.error(f"Warning: pynput listener could not be started ({e}). Falling back to evdev-only mode.")
+            while True:
+                render_iteration()
+    else:
+        while True:
+            render_iteration()
+
+    log.info("Exiting")
+
+def main(args):
+    base_apps = ["cpu", "net", "disk", "mem-bat", "snap"]
     plugin_apps = []
     ###############################################################
     ###  Load additional app names from plugins for listing insalled apps  ###
@@ -385,14 +445,16 @@ if __name__ == "__main__":
     mode_group.add_argument("--help", "-h", action="help",
                          help="Show this help message and exit")
     
-    mode_group.add_argument("-config-file", "-cf", type=str, default="./config.yaml", help="File that specifiees which apps to run in each panel quadrant")
+    mode_group.add_argument("-config-file", "-cf", type=str, default="config.yaml", help="File that specifies which apps to run in each panel quadrant")
     mode_group.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
     mode_group.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
     mode_group.add_argument("--list-apps", "-la", action="store_true", help="List the installed apps, and exit")
     
     args = parser.parse_args()
     if args.no_key_listener: print("Key listener disabled")
-    print(f"Using config file {args.config_file}")
-    
-    main(args, base_apps, plugin_apps)
+    log.info(f"Using config file {args.config_file}")
+    app(args, base_apps, plugin_apps)
+
+if __name__ == "__main__":
+    main(sys.argv)
 
