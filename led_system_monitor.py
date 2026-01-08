@@ -7,6 +7,10 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import importlib.util
 import sys
 import os
+from collections import defaultdict
+import logging
+
+log = logging.getLogger(__name__)
 
 
 # Internal Dependencies
@@ -16,12 +20,44 @@ from monitors import CPUMonitor, MemoryMonitor, BatteryMonitor, DiskMonitor, Net
 # External Dependencies
 import numpy as np
 import evdev
-from pynput.keyboard import Key, Listener
+from yaml import safe_load
+# Optional cross-platform keyboard input; on some Linux Wayland setups this may be unavailable
+try:
+    from pynput.keyboard import Key, Listener
+    PYNPUT_AVAILABLE = True
+except Exception:
+    Key = None
+    Listener = None
+    PYNPUT_AVAILABLE = False
 from serial.tools import list_ports
-
 
 KEY_I = ('KEY_I', 23)
 MODIFIER_KEYS = [('KEY_RIGHTALT', 100), ('KEY_LEFTALT', 56)]
+
+def find_keyboard_device():
+    """Auto-detect keyboard input device from /dev/input/event*"""
+    try:
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        for device in devices:
+            # Look for devices with keyboard capabilities (EV_KEY with standard keys)
+            capabilities = device.capabilities(verbose=False)
+            if evdev.ecodes.EV_KEY in capabilities:
+                keys = capabilities[evdev.ecodes.EV_KEY]
+                # Check if device has typical keyboard keys (letters and modifiers)
+                has_letters = any(k in keys for k in range(evdev.ecodes.KEY_Q, evdev.ecodes.KEY_P + 1))
+                has_modifiers = any(k in keys for k in [evdev.ecodes.KEY_LEFTALT, evdev.ecodes.KEY_RIGHTALT])
+                if has_letters and has_modifiers:
+                    return device.path
+    except Exception as e:
+        log.warn(f"Warning: Could not auto-detect keyboard device: {e}")
+    return None
+
+def get_config(config_file):
+    config_file = os.environ.get("CONFIG_FILE", None) or config_file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_file = os.path.join(current_dir, config_file)
+    with open(config_file, 'r') as f:
+       return safe_load(f)
 
 def discover_led_devices():
     locations = []
@@ -35,37 +71,85 @@ def discover_led_devices():
         # Sort by y:n.m to get the devices in left-right order
         return sorted(locations, key = lambda x: re.sub(r'^\d+\-\d+\.', '', x[0]))
     except Exception as e:
-        print(f"An Exception occured while tring to locate LED Matrix devices. {e}")
+        log.error(f"An Exception occured while tring to locate LED Matrix devices. {e}")
+
+def list_apps(base_apps, plugin_apps, quads):
+    max_len = max(map(lambda x: len(x), base_apps + plugin_apps))
+    print("Installed Apps:")
+    print("   " + "Name".ljust(max_len+3, ' ') + "Source".ljust(12, " ") + "Configuration")
+    configured_apps = defaultdict(list)
+    for quad in quads.values():
+        for app in quad:
+            del app["app"] # Just the list name in the yaml file, value will be set to None
+            configured_apps[app["name"]].append(app)
+    for app in [*base_apps , *plugin_apps]:
+        if not app in configured_apps:
+            print(f"   {app.ljust(max_len+3, ' ')}", end='')
+            print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
+            print(f"None")
+        for _app in configured_apps[app]:
+            print(f"   {app.ljust(max_len+3, ' ')}", end='')
+            print(f"{'plugin app'.ljust(12, ' ')if app in plugin_apps else 'base app'.ljust(12, ' ')}", end='')
+            print(f"{_app}")
         
-# Global device variable - will be initialized in main() if key listener enabled
 device = None
-def main(args):    
+def app(args, base_apps, plugin_apps):    
     # Initialize evdev device for key listening if not disabled
     global device
     if not args.no_key_listener:
-        try:
-            device = evdev.InputDevice('/dev/input/event7')
-        except (PermissionError, FileNotFoundError, OSError) as e:
-            print(f"Warning: Cannot access keyboard device for key listening: {e}")
-            print("Key listener will be disabled. Use --no-key-listener to suppress this warning.")
-            args.no_key_listener = True
+        # Try to auto-detect keyboard device first
+        kbd_path = find_keyboard_device()
+        if kbd_path:
+            try:
+                device = evdev.InputDevice(kbd_path)
+                log.info(f"Using keyboard device: {kbd_path}")
+            except (PermissionError, FileNotFoundError, OSError) as e:
+                log.warn(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
+                log.warn("Try running: sudo usermod -a -G input $USER (then log out and back in)")
+                log.warn("Or use --no-key-listener to disable keyboard monitoring.")
+                args.no_key_listener = True
+                device = None
+        else:
+            log.warn("Warning: Could not find a suitable keyboard device for evdev monitoring.")
+            log.warn("Key listening will be limited to pynput only (if available).")
             device = None
-    else:
-        device = None
+
+    ################################################################################
+    ### Parse config file to enable control of apps by quadrant and by time slice ##
+    ################################################################################
+    config = get_config(args.config_file)
+    duration = config['duration'] #Default config to be applied if not set in an app
+    quads = config['quadrants']
+    top_left,  bottom_left, top_right, bottom_right, = \
+        quads['top-left'], quads['bottom-left'], quads['top-right'], quads['bottom-right']
     
+    # Track index of active app, for cycling through apps in a quadrant by time slice
+    app_idx = defaultdict(int)
+    for quad in quads:
+        app_idx[quad] = 0
+        
+    # Each app optionally specifes how long it stays active before cycling to the next one
+    app_duration = defaultdict(int)
+    for quad in quads.items():
+        for app in quad[1]:
+            app_duration[app["name"]] = int(app.get("duration", duration))
+
+    if args.list_apps:
+        list_apps(base_apps, plugin_apps, quads)
+        sys.exit()
+
     led_devices = discover_led_devices()
     if not len(led_devices):
-        print("No LED devices found")
+        log.error("No LED devices found")
         sys.exit(0)
     elif len(led_devices) == 1:
-        print(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
-        args.top_right = args.bottom_right = "none"
+        log.warn(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
     else:
-        print(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
+        log.info(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
     drawing_queues = []
     
-    # Track key presses to reveal metrics ID in each panel section
+    # Track key presses to reveal app ID in each quadrant or panel
     global alt_pressed
     alt_pressed = False
     global i_pressed
@@ -83,16 +167,18 @@ def main(args):
     disk_monitor = DiskMonitor()
     network_monitor = NetworkMonitor()
 
-    # Setuop left panel drawing queue
+    # Setup left panel drawing queue
     left_drawing_queue = queue.Queue(2)
     left_drawing_thread = DrawingThread(locations[0], left_drawing_queue)
+    left_drawing_thread.set_animate(False)
     left_drawing_thread.start()    
     drawing_queues.append(left_drawing_queue)
 
-    # Setup right panel drawing queue (if present)
+    # Setup right panel drawing queue (if panel is present)
     if len(locations) == 2:
         right_drawing_queue = queue.Queue(2)
         right_drawing_thread = DrawingThread(locations[1], right_drawing_queue)
+        right_drawing_thread.set_animate(False)
         right_drawing_thread.start()
         drawing_queues.append(right_drawing_queue)
     
@@ -116,8 +202,8 @@ def main(args):
         draw_app(arg, grid, last_network_upload, foreground_value, bar_x_offset=1, y=idx)
         draw_app(arg, grid, last_network_download, foreground_value, bar_x_offset=5, y=idx)
         
-    def draw_snap(grid, foreground_value, file, snap_path, panel):
-        draw_app("snap", grid, foreground_value, file, snap_path, panel)    
+    def draw_snap(arg, grid, foreground_value, idx, file, snap_path, panel):
+        draw_app(arg, grid, foreground_value, file, snap_path, panel)
         
     app_functions = {
         "cpu": draw_cpu,
@@ -129,28 +215,37 @@ def main(args):
     }
     
     def on_press(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
+        global alt_pressed, i_pressed
+        # If pynput is unavailable, this callback will not be used; guard anyway
+        if not PYNPUT_AVAILABLE:
+            return
+        try:
+            if getattr(key, 'char', None) == 'i':
                 i_pressed = True
-        elif key == Key.alt:
-            alt_pressed = True
+            elif Key is not None and key == Key.alt:
+                alt_pressed = True
+        except Exception:
+            # Be defensive; ignore unexpected pynput key objects
+            pass
 
     def on_release(key):
-        global alt_pressed
-        global i_pressed
-        if type(key).__name__ == 'KeyCode':
-            if key.char == 'i':
+        global alt_pressed, i_pressed
+        if not PYNPUT_AVAILABLE:
+            return
+        try:
+            if getattr(key, 'char', None) == 'i':
                 i_pressed = False
-        elif key == Key.alt:
-            alt_pressed = False
-        if key == Key.esc:
-            # Stop listener
-            return False
+            elif Key is not None and key == Key.alt:
+                alt_pressed = False
+            if Key is not None and key == Key.esc:
+                # Stop listener
+                return False
+        except Exception:
+            pass
         
     #################################################
-        ###      Load app functions from plugins      ###
+    ###      Load app functions from plugins      ###
+    #################################################
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
         # Try to find plugins directory - either in current dir or installed location
         import os.path
@@ -169,108 +264,164 @@ def main(args):
 
                 for obj in module.app_funcs:
                     app_functions[obj["name"]] = obj["fn"]
-    #################################################
-    
-    # Snapshot duration validation
-    if hasattr(args, 'snapshot_duration') and hasattr(args, 'snapshot_interval'):
-        if args.snapshot_duration > args.snapshot_interval:
-            print("Snapshot duration must be less than snapshot interval. Exiting...")
-            sys.exit(0)
-    
-    # Use pynput Listener for cross-platform compatibility, but fallback to evdev if available
-    with Listener(
-        on_press=on_press,
-        on_release=on_release):
-        while True:
-            elapsed_time = time.time()
-            show_snapshot = True if not hasattr(args, 'snapshot_interval') or args.snapshot_interval == 0 or elapsed_time % args.snapshot_interval <= getattr(args, 'snapshot_duration', 0) else False
-            try:
-                screen_brightness = get_monitor_brightness()
-                background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
-                foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
 
-                # Clamp brightness values to the valid byte range
-                background_value = max(0, min(255, background_value))
-                foreground_value = max(0, min(255, foreground_value))
 
-                grid = np.zeros((9,34), dtype = int)
-                
-                # Check for key combo using both evdev (if available) and pynput
-                active_keys = device.active_keys(verbose=True) if device else []
-                evdev_key_pressed = (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys if device else False
-                pynput_key_pressed = i_pressed and alt_pressed
-                key_combo_active = (evdev_key_pressed or pynput_key_pressed) and not args.no_key_listener
-                
-                if key_combo_active:
-                    # Show app IDs for both panels
-                    if hasattr(args, 'left_snap') and args.left_snap and show_snapshot:
-                        draw_id(grid, "snap", foreground_value)
-                    else:
-                        draw_outline_border(grid, background_value)
-                        draw_ids(grid, args.top_left, args.bottom_left, foreground_value)
-                    left_drawing_queue.put(grid)
-                    
-                    if len(drawing_queues) > 1:  # Right panel exists
-                        grid = np.zeros((9,34), dtype = int)
-                        if hasattr(args, 'right_snap') and args.right_snap and show_snapshot:
-                            draw_id(grid, "snap", foreground_value)
-                        else:
-                            draw_outline_border(grid, background_value)
-                            draw_ids(grid, args.top_right, args.bottom_right, foreground_value)
-                        right_drawing_queue.put(grid)
-                    time.sleep(0.1)
-                    continue
+    # Track last draw time, to enable cycling through them for each quadrannt
+    base_time_map = {
+        # Each dict stores last draw time for each app
+        'top-left': defaultdict(lambda: time.monotonic()),
+        'bottom-left': defaultdict(lambda: time.monotonic()),
+        'top-right': defaultdict(lambda: time.monotonic()),
+        'bottom-right': defaultdict(lambda: time.monotonic()),
+    }
 
-                # Draw by half or whole panel, depending on program args
-                for i, draw_queue in enumerate(drawing_queues):
-                    grid = np.zeros((9,34), dtype = int)
-                    if i == 0:
-                        panel = 'left'
-                        if hasattr(args, 'left_snap') and args.left_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.left_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'left')
-                            draw_queue.put(grid)
-                            continue
-                        else:
-                            _args = [args.top_left, args.bottom_left]
-                    else:
-                        panel = 'right'
-                        if hasattr(args, 'right_snap') and args.right_snap is not None and show_snapshot:
-                            app_functions["snap"](grid, foreground_value, args.right_snap, getattr(args, 'snapshot_path', 'snapshot_files'), 'right')
-                            draw_queue.put(grid)
-                            continue
-                        _args = [args.top_right, args.bottom_right]
-                    
-                    for j, arg in enumerate(_args):
-                        if j == 0:
-                            idx = 0
-                            loc = 'top'
-                        else:
-                            idx = 16
-                            loc = 'bottom'
-                        try:
-                            func = app_functions[arg]
-                            func(arg, grid, foreground_value, idx)
-                        except KeyError:
-                            print(f"Unrecognized display option {arg} for {loc} {panel}")
-                        if arg == 'mem-bat': arg = 'mem' # Single border draw for mem and bat together
-                        draw_app_border(arg, grid, background_value, idx)
-                    draw_queue.put(grid)
-                    
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                import traceback
-                print(f"Error in main loop: {e}")
-                traceback.print_exc()
-                time.sleep(1.0)
-            time.sleep(0.1)
+    # Used to detect that the key listener was activated, for restoring anination mode after ID display
+    global latch_key_combo
+    latch_key_combo = False
+    def render_iteration():
+        global latch_key_combo
+        try:
+            screen_brightness = get_monitor_brightness()
+            background_value = int(screen_brightness * (max_background_brightness - min_background_brightness) + min_background_brightness)
+            foreground_value = int(screen_brightness * (max_foreground_brightness - min_foreground_brightness) + min_foreground_brightness)
+
+            # Clamp brightness values to the valid byte range
+            background_value = max(0, min(255, background_value))
+            foreground_value = max(0, min(255, foreground_value))
+
+            grid = np.zeros((9,34), dtype = int)
             
-        print("Exiting")
-        
-if __name__ == "__main__":
-    app_names = ["cpu", "net", "disk", "mem-bat", "none"]
+            # Check for key combo using both evdev (if available) and pynput
+            active_keys = device.active_keys(verbose=True) if device else []
+            evdev_key_pressed = True if (MODIFIER_KEYS[0] in active_keys or MODIFIER_KEYS[1] in active_keys) and KEY_I in active_keys and device else False
+            pynput_key_pressed = i_pressed and alt_pressed
+            key_combo_active = (evdev_key_pressed or pynput_key_pressed) and not args.no_key_listener
+
+            # Track when an app is changed in either panel, used to manage animation state
+            idx_changed = {
+                left_drawing_queue: False,
+                right_drawing_queue: False
+            }
+            for quadrant,apps in quads.items():
+                    app = apps[app_idx[quadrant]]
+                    if time.monotonic() - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']]):
+                        if 'left' in quadrant:
+                            idx_changed[left_drawing_queue] = True
+                        else:
+                            idx_changed[right_drawing_queue] = True
+                        app_idx[quadrant] = (app_idx[quadrant] + 1) % len(quads[quadrant])
+                        app = apps[app_idx[quadrant]]
+                        base_time_map[quadrant][app['name']] = time.monotonic()
+
+            left_args = [
+                top_left[app_idx['top-left']],
+                bottom_left[app_idx['bottom-left']],
+            ]
+
+            right_args = [
+                top_right[app_idx['top-right']],
+                bottom_right[app_idx['bottom-right']]
+            ]
+
+            # Capture animating state so we can restart it if necessary after stopping it for ID display
+            animating_left = left_args[0].get("animate", False) or left_args[1].get("animate", False)
+            animating_right = right_args[0].get("animate", False) or right_args[1].get("animate", False)
+            
+            if key_combo_active:
+                # Show app IDs for each quadrant or panel
+                draw_outline_border(grid, background_value)
+                #If app takes up entire panel, we draw the ID border differently
+                if left_args[0].get("scope", None) == "panel":
+                    draw_id(grid, left_args[0]['name'], foreground_value)
+                else:
+                    draw_ids(grid, left_args[0]['name'], left_args[1]['name'], foreground_value)
+                left_drawing_queue.put((grid, False))
+                
+                if len(drawing_queues) > 1:  # Right panel exists
+                    grid = np.zeros((9,34), dtype = int)
+                    draw_outline_border(grid, background_value)
+                    if right_args[0].get("scope", None) == "panel":
+                        draw_id(grid, right_args[0]['name'], foreground_value)
+                    else:
+                        draw_ids(grid, right_args[0]['name'], right_args[1]['name'], foreground_value)
+                    right_drawing_queue.put((grid, False))
+                time.sleep(0.1)
+                latch_key_combo = True
+                return
+            
+            for i, draw_queue in enumerate(drawing_queues):
+                grid = np.zeros((9,34), dtype = int)
+                if i == 0:
+                    panel = 'left'
+                    _args = left_args
+                else:
+                    panel = 'right'
+                    _args = right_args
+                for j, arg in enumerate(_args):
+                    arg_name = arg['name']
+                    if arg_name == "none": continue
+                    if j == 0:
+                        idx = 0
+                        loc = 'top'
+                    else:
+                        idx = 16
+                        loc = 'bottom'
+                    try:
+                        func = app_functions[arg_name]
+                        func_args = [arg_name, grid, foreground_value, idx]
+                        if 'args' in arg:
+                            func_args.extend(arg.get("args", None))
+                        func(*func_args)
+                        animate = arg.get("animate", False)
+                    except KeyError:
+                        log.error(f"Unrecognized display option {arg_name} for {loc} {panel}")
+                    # Single border draw for mem and bat together
+                    if arg_name == 'mem-bat': arg_name = 'mem'
+                    draw_app_border(arg_name, grid, background_value, idx)
+                do_animate = None
+                if idx_changed[draw_queue]:
+                    do_animate = animate
+                    idx_changed[draw_queue] = False
+                # Restart animation if it was stopped for ID display
+                if latch_key_combo:
+                    if (animating_left and panel == 'left') or (animating_right and panel == 'right'):
+                        do_animate = True
+                draw_queue.put((grid, do_animate))
+            latch_key_combo = False
+            time.sleep(0.1)     
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            import traceback
+            log.error(f"Error in main loop: {e}")
+            traceback.print_exc()
+            time.sleep(1.0)
+            
+    # Informative message if pynput is not available
+    if not PYNPUT_AVAILABLE and not args.no_key_listener:
+        log.warn("Info: pynput is unavailable; running in evdev-only mode. Use Ctrl+C to exit.")
+
+    # Prefer pynput if available; fall back silently if it fails to start (common on Wayland)
+    if PYNPUT_AVAILABLE and not args.no_key_listener:
+        try:
+            with Listener(on_press=on_press, on_release=on_release):
+                while True:
+                    render_iteration()
+        except Exception as e:
+            log.error(f"Warning: pynput listener could not be started ({e}). Falling back to evdev-only mode.")
+            while True:
+                render_iteration()
+    else:
+        while True:
+            render_iteration()
+
+    log.info("Exiting")
+
+def main(args):
+    base_apps = ["cpu", "net", "disk", "mem-bat", "snap"]
+    plugin_apps = []
     ###############################################################
-    ###  Load additional app names from plugins for arg parser  ###
+    ###  Load additional app names from plugins for listing insalled apps  ###
     if not re.search(r"--disable-plugins|-dp", str(sys.argv)):
         # Try to find plugins directory - either in current dir or installed location
         import os.path
@@ -286,8 +437,7 @@ if __name__ == "__main__":
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
-
-                app_names += map(lambda o: o["name"], module.app_funcs)
+                plugin_apps += map(lambda o: o["name"], module.app_funcs)
     #################################################################
     parser = ArgumentParser(prog="FW LED System Monitor", add_help=False,
                             description="Displays system performance metrics in the Framework 16 LED Matrix input module",
@@ -296,39 +446,28 @@ if __name__ == "__main__":
     mode_group.add_argument("--help", "-h", action="help",
                          help="Show this help message and exit")
     
-    addGroup = parser.add_argument_group(title = "Metrics Display Options")
-    addGroup.add_argument("--top-left", "-tl", type=str, default="cpu", choices=app_names,
-                         help="Metrics to display in the top section of the left matrix panel")
-    addGroup.add_argument("--bottom-left", "-bl", type=str, default="mem-bat", choices=app_names,
-                         help="Metrics to display in the bottom section of the left matrix panel")
-    addGroup.add_argument("--top-right", "-tr", type=str, default="disk", choices=app_names,
-                         help="Metrics to display in the top section of the right matrix panel")
-    addGroup.add_argument("--bottom-right", "-br", type=str, default="net", choices=app_names,
-                         help="Metrics to display in the bottom section of the right matrix panel")
-    addGroup.add_argument("--left-snap", "-ls", type=str, default=None,
-                         help="Snapshot file to display on the left panel. Specify * to cycle through all files in the snapshot dir")
-    addGroup.add_argument("--right-snap", "-rs", type=str, default=None,
-                         help="Snapshot file to display on the right panel. Specify * to cycle through all files in the snapshot dir")
-    addGroup.add_argument("--snapshot-path", "-sp", type=str, default="snapshot_files",
-                          help="The file path that contains either the snapshot files that may be displayed on either panel or " +
-                          "'left' and 'right' directories that contain files that may be displayed on the respective panel")
-    addGroup.add_argument("--snapshot-interval", "-si", type=int, default=0,
-                          help="The interval (in seconds) at which the selected snapshot files will be rendered. A value " +
-                          "of zero means the snapshots should be rendered continuously")
-    addGroup.add_argument("--snapshot-duration", "-sd", type=int, default=0,
-                          help="The number of seconds that the snapshot file will be rendered at the specified interval. Must be " +
-                          "less than the value of --snapshot-interval")
-    
-    addGroup.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
-    addGroup.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
+    mode_group.add_argument("-config-file", "-cf", type=str, default="config.yaml", help="File that specifies which apps to run in each panel quadrant")
+    mode_group.add_argument("--no-key-listener", "-nkl", action="store_true", help="Do not listen for key presses")
+    mode_group.add_argument("--disable-plugins", "-dp", action="store_true", help="Do not load any plugin code")
+    mode_group.add_argument("--list-apps", "-la", action="store_true", help="List the installed apps, and exit")
     
     args = parser.parse_args()
-    print(f"top left {args.top_left}")
-    print(f"bottom left {args.bottom_left}")
-    print(f"top right {args.top_right}")
-    print(f"bottom right {args.bottom_right}")
-    print(f"left snap {args.left_snap}")
-    print(f"right snap {args.right_snap}")
     if args.no_key_listener: print("Key listener disabled")
-    
-    main(args)
+    log.info(f"Using config file {args.config_file}")
+    app(args, base_apps, plugin_apps)
+
+if __name__ == "__main__":
+    level = logging.WARNING
+    if os.getenv("LOG_LEVEL", "").lower() == "debug":
+        level = logging.DEBUG
+    elif os.getenv("LOG_LEVEL", "").lower() == "error":
+        level = logging.ERROR
+    elif os.getenv("LOG_LEVEL", "").lower() == "info":
+        level = logging.INFO
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+    main(sys.argv)
+

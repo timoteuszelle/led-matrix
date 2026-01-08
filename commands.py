@@ -35,3 +35,10 @@ def send_command(s, command_id, parameters = None, with_response=False):
     if with_response:
         res = s.read(1)
         return res
+    
+def do_animate(s, animate=False, with_response=False):
+    message = bytearray([0x32, 0xAC, Commands.Animate, animate])
+    s.write(message)
+    if with_response:
+        res = s.read(1)
+        return res
