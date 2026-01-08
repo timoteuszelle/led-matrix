@@ -164,6 +164,8 @@ For automated continuous execution, you can run as a systemd service instead:
 ./build_andOnstall.sh
 # manage the service
 systemctl start|stop|status fwledmatrix.service
+# The service config file is at /etc/systemd/system/led_mon.service.
+# The service executable is at /opt/led_mon/led_mon (sym-linked to /usr/local/bin/led_mon)
 ```
 
 ### Option 2: Python Virtual Environment
@@ -234,6 +236,10 @@ groups $USER
 ```
 
 **Security Note:** Adding your user to the `input` group allows any program running as your user to potentially capture keystrokes. Consider the security implications before doing this, or do not add your user to the group, and use `--no-key-listener` to disable this feature.
+
+### Modifying the Apps Configuration
+* Edit config.yaml. See example settings and comments for help.
+* When running as a service, the config file will be at /opt/led_mon/_internal/config.yaml (unless overriden by --config-file arg)
 
 ### Verifying Device Access
 
