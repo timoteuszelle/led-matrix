@@ -51,32 +51,28 @@
             duration = 10;
             quadrants = {
               top-left = [{
-                app = {
-                  name = cfg.topLeft;
-                  duration = 10;
-                  animate = false;
-                };
+                app = null;
+                name = cfg.topLeft;
+                duration = 10;
+                animate = false;
               }];
               top-right = [{
-                app = {
-                  name = cfg.topRight;
-                  duration = 10;
-                  animate = false;
-                };
+                app = null;
+                name = cfg.topRight;
+                duration = 10;
+                animate = false;
               }];
               bottom-left = [{
-                app = {
-                  name = cfg.bottomLeft;
-                  duration = 10;
-                  animate = false;
-                };
+                app = null;
+                name = cfg.bottomLeft;
+                duration = 10;
+                animate = false;
               }];
               bottom-right = [{
-                app = {
-                  name = cfg.bottomRight;
-                  duration = 10;
-                  animate = false;
-                };
+                app = null;
+                name = cfg.bottomRight;
+                duration = 10;
+                animate = false;
               }];
             };
           };
