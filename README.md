@@ -18,11 +18,12 @@ git clone <repository-url>
 cd led-matrix-monitoring
 
 # Run with automatic dependency installation
-chmod +x run.sh
-./run.sh
+chmod +x build_and_install.sh
+./build_and_install.sh
+./dist/led_mon/led_mon #optionally run manually
 ```
 
-The `run.sh` script will automatically detect your Linux distribution and install the required dependencies.
+The `build_and_install.sh` script will automatically detect your Linux distribution, install the required dependencies, build an executable file of the python application, and install it as a sustemd service fwledmonitor.service.
 
 ## Capabilities
 * Display system performance characteristics in real-time
@@ -34,16 +35,21 @@ The `run.sh` script will automatically detect your Linux distribution and instal
   * Fan speeds
 * Display any system monitoring app on any quadrant
   * Top or bottom of left or right panel
-  * Specified via program arguments
-* Display a "snapshot" from specified json file(s) on either or both panels. Continuous or periodic display is supported.
+  * Assign multiple apps to any quadrant and cycle throiugh them at specified time intervals
+  * Turn on animation and define command arguments for apps
+  * Specified via a yaml config file
+* Display a "snapshot" from specified json file(s) on either or both panels.
 * Keyboard shortcut identifies apps running in each quadrant by displaying abbreviated name 
 * Plugin framework supports simplified development of addiitonal LED Panel applications
 * Automatic detection of left and right LED panels
+* Automatic detection of keyboard device (for keyboard shortcut use)
 ## Capabilities added to the original implementation
  * Temp sensor and fan speed apps
- * Metrics apps configurable to any matrix quadrant
+ * Metrics apps configurable to any matrix quadrant, with optional time multiplexing
+ * Configuration of apps via yaml config file
+ * LED panel animation
  * Plugin capability
- * Automatic device detection
+ * Automatic device and keyboard detection
  * Snapshot app
 ## Installation
 
@@ -54,6 +60,7 @@ The `run.sh` script will automatically detect your Linux distribution and instal
 sudo apt update
 sudo apt install -y python3-numpy python3-psutil python3-serial python3-evdev
 cd led-matrix-monitoring
+python3 -m pip install -r requirements.txt
 python3 led_system_monitor.py
 ```
 
@@ -148,18 +155,15 @@ journalctl -u led-matrix-monitoring -f
 # Solution: Ensure DISPLAY environment variable is set in service override
 ```
 
-**Alternative: User Service (Advanced)**
+**Alternative: Systemd Service (Advanced)**
 
-For more complex setups, you can run as a user service instead:
+For automated continuous execution, you can run as a systemd service instead:
 
 ```bash
-# Copy the service to user directory
-cp /etc/systemd/system/led-matrix-monitoring.service ~/.config/systemd/user/
-
-# Enable and start user service
-systemctl --user daemon-reload
-systemctl --user enable led-matrix-monitoring
-systemctl --user start led-matrix-monitoring
+# The service runs as system user led_mon (created by the script if needed)
+./build_andOnstall.sh
+# manage the service
+systemctl start|stop|status fwledmatrix.service
 ```
 
 ### Option 2: Python Virtual Environment
@@ -167,10 +171,10 @@ systemctl --user start led-matrix-monitoring
 * Commands below work with PyEnv:
 ```bash
 cd led-matrix-monitoring
-pyenv install 3.11
+pyenv install 3.11 # or higher (tested up to 3.14)
 pyenv virtualenv 3.11 led-matrix-env
 pyenv activate led-matrix-env
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ## Required Permissions
@@ -179,7 +183,7 @@ pip install -r requirements.txt
 
 By default, LED Matrix devices appear as serial devices (e.g., `/dev/ttyACM0`, `/dev/ttyACM1`) that are typically owned by root with restricted permissions. To allow your user to access these devices, you have several options:
 
-#### Option 1: Add User to dialout Group (Recommended)
+#### Option 1: Add User to dialout Group (Recommended for running under user account, not needed for service execution)
 ```bash
 # Add your user to the dialout group
 sudo usermod -a -G dialout $USER
@@ -189,6 +193,8 @@ newgrp dialout
 
 # Verify group membership
 groups $USER
+
+# This is done by install_service.sh for the led_mon system account that executes the service
 ```
 
 #### Option 2: Create Custom udev Rules
@@ -223,9 +229,11 @@ sudo usermod -a -G input $USER
 
 # Log out and log back in, then verify
 groups $USER
+
+# This is done by install_servce.sh for the led_mon system account that executes the service
 ```
 
-**Security Note:** Adding your user to the `input` group allows any program running as your user to potentially capture keystrokes. Consider the security implications before doing this, or use `--no-key-listener` to disable this feature.
+**Security Note:** Adding your user to the `input` group allows any program running as your user to potentially capture keystrokes. Consider the security implications before doing this, or do not add your user to the group, and use `--no-key-listener` to disable this feature.
 
 ### Verifying Device Access
 
@@ -250,27 +258,20 @@ sudo pip install -r requirements.txt
 ```
 cd led-matrix
 python led-sysyem-monitor.py [--help] [--top-left {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--bottom-left {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--top-right {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--bottom-right {cpu,net,disk,mem-bat,none,temp,fan}]
-                             [--left-snap LEFT_SNAP]
-                             [--right-snap RIGHT_SNAP]
-                             [--snapshot-path SNAPSHOT_PATH]
-                             [--snapshot-interval SNAPSHOT_INTERVAL]
-                             [--snapshot-duration SNAPSHOT_DURATION]
-                             [--no-key-listener] [--disable-plugins]
+                             [--config file <path/to/config/file> (default ./config.yaml]
+                             [--list-apps]
 python led-sysyem-monitor.py --help #For more verbose help info
 ```
 ## Run as a Linux service
 ```
 cd led-matrix
-./install_as_service.sh [...args] #program args to be applied when starting or restarting the service
+./build_and_install.sh
 sudo systemctl start|stop|restart|status fwledmonitor
 ```
 ## Keyboard Shortcut
 * Alt+I: displays app names in each quadrant while keys are pressed
 * Disable key listener with `--no-key-listener` program arg
-* To use the key listener, the app must have read permission on the keyboard device (e.g /dev/input/event7). The service runs as root, and therefore has the required access. If you want toi use the key listener while running the app directly, you need to add your user account to the `input` group and ensure there is a group read permission on the keyboard device. **NB:** Consider the implications of this. Any program running as a user in the `input` group will be able to capture your keystrokes.
+* To use the key listener, the app must have read permission on the keyboard device (e.g /dev/input/event7). The service runs under a system account that has the required access. If you want to use the key listener while running the app manually, you need to add your user account to the `input` group and ensure there is a group read permission on the keyboard device. **NB:** Consider the implications of this. Any program running as a user in the `input` group will be able to capture your keystrokes.
 ## Plugin Development
 * Add a file in the `plugins` dir with a name that matches the blob pattern `*_plugin.py`
 * See `temp_fan_plugin.py` for an implementation example
