@@ -53,6 +53,7 @@ def find_keyboard_device():
     return None
 
 def get_config(config_file):
+    config_file = os.environ.get("CONFIG_FILE", None) or config_file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     config_file = os.path.join(current_dir, config_file)
     with open(config_file, 'r') as f:
@@ -456,5 +457,17 @@ def main(args):
     app(args, base_apps, plugin_apps)
 
 if __name__ == "__main__":
+    level = logging.WARNING
+    if os.getenv("LOG_LEVEL", "").lower() == "debug":
+        level = logging.DEBUG
+    elif os.getenv("LOG_LEVEL", "").lower() == "error":
+        level = logging.ERROR
+    elif os.getenv("LOG_LEVEL", "").lower() == "info":
+        level = logging.INFO
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
     main(sys.argv)
 

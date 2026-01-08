@@ -22,4 +22,5 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 if __name__ == "__main__":
+    log.debug("Calling main")
     main(sys.argv)

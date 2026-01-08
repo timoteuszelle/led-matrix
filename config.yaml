@@ -7,7 +7,7 @@ quadrants:
   top-left:
   - app:
     name: cpu
-    duration: 300
+    duration: 10
     animate: false
   # Use this pattern for apps with args. Change only the args values
   - app:
@@ -24,7 +24,7 @@ quadrants:
   top-right:
   - app:
     name: temp
-    duration: 300
+    duration: 10
     animate: false
     scope: quadrant
   - app:
@@ -39,7 +39,7 @@ quadrants:
   bottom-right:
   - app:
     name: fan
-    duration: 300
+    duration: 10
     animate: false
   # Keep thhe quadrant blank in this time slot. Used in conjunction with an app
   # in the top quadrant that fills the entire panel, e.g. the snapshot (snap) app
@@ -50,7 +50,7 @@ quadrants:
   bottom-left:
   - app:
     name: mem-bat
-    duration: 300
+    duration: 10
     animate: false
   - app:
     name: none
