@@ -24,4 +24,4 @@ else
 fi
 
 echo "Installing PyInstaller via pip..."
-pip3 install --user pyinstaller
+python -m pip install pyinstaller
