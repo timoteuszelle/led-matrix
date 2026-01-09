@@ -10,7 +10,7 @@ This software is intended for use on a Framework 16 laptop with LED Matrix Panel
 
 ## Quick Start
 
-For most users, the fastest way to get started:
+For most users, the fastest way to get started. This installs dependencies, builds the app, installs it as a service, and starts the service:
 
 ```bash
 # Clone the repository
@@ -53,21 +53,29 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
  * Snapshot app
 ## Installation
 
-### Option 1: System Package Installation (Recommended)
+### System Package and Python Library Installation (For running manually, e.g. in an IDE)
 
 #### For Ubuntu/Debian users:
+* Install [PyEnv](https://github.com/pyenv/pyenv) or any other python virtual environment package
+* Commands below work with PyEnv:
 ```bash
 sudo apt update
-sudo apt install -y python3-numpy python3-psutil python3-serial python3-evdev
+sudo apt install -y python3-numpy python3-psutil python3-serial python3-evdev python3-pynput python3-yaml python3-pip
 cd led-matrix-monitoring
+pyenv install 3.11 # or higher (tested up to 3.14)
+pyenv virtualenv 3.11 led-matrix-env
+pyenv activate led-matrix-env
 python3 -m pip install -r requirements.txt
 python3 led_system_monitor.py
 ```
 
 #### For Fedora users:
 ```bash
-sudo dnf install -y python3-numpy python3-psutil python3-pyserial python3-evdev
-cd led-matrix-monitoring
+sudo yum install -y python3-numpy python3-psutil python3-pyserial python3-evdev python3-pynput python3-pyyaml python3-pip
+cd led-matrix-monitoring\
+pyenv install 3.11 # or higher (tested up to 3.14)
+pyenv virtualenv 3.11 led-matrix-env
+pyenv activate led-matrix-env
 python3 led_system_monitor.py
 ```
 
@@ -166,17 +174,6 @@ For automated continuous execution, you can run as a systemd service instead:
 systemctl start|stop|status fwledmatrix.service
 # The service config file is at /etc/systemd/system/led_mon.service.
 # The service executable is at /opt/led_mon/led_mon (sym-linked to /usr/local/bin/led_mon)
-```
-
-### Option 2: Python Virtual Environment
-* Install [PyEnv](https://github.com/pyenv/pyenv) or any other python virtual environment package
-* Commands below work with PyEnv:
-```bash
-cd led-matrix-monitoring
-pyenv install 3.11 # or higher (tested up to 3.14)
-pyenv virtualenv 3.11 led-matrix-env
-pyenv activate led-matrix-env
-python -m pip install -r requirements.txt
 ```
 
 ## Required Permissions
