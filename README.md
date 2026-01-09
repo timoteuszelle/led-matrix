@@ -23,7 +23,7 @@ chmod +x build_and_install.sh
 ./dist/led_mon/led_mon #optionally run manually
 ```
 
-The `build_and_install.sh` script will automatically detect your Linux distribution, install the required dependencies, build an executable file of the python application, and install it as a sustemd service fwledmonitor.service.
+The `build_and_install.sh` script will automatically detect your Linux distribution, install the required dependencies, build an executable file of the python application, and install it as a systemd service fwledmonitor.service.
 
 ## Capabilities
 * Display system performance characteristics in real-time
@@ -39,7 +39,7 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
   * Turn on animation and define command arguments for apps
   * Specified via a yaml config file
 * Display a "snapshot" from specified json file(s) on either or both panels.
-* Keyboard shortcut identifies apps running in each quadrant by displaying abbreviated name 
+* Keyboard shortcut `ALT` + `I` identifies apps running in each quadrant by displaying abbreviated name
 * Plugin framework supports simplified development of addiitonal LED Panel applications
 * Automatic detection of left and right LED panels
 * Automatic detection of keyboard device (for keyboard shortcut use)
