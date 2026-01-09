@@ -6,7 +6,7 @@
 
 python3.pkgs.buildPythonApplication rec {
   pname = "led-matrix-monitoring";
-  version = "1.1.1";
+  version = "1.2.0-yaml";
   format = "other";
 
   src = ./.;
@@ -23,22 +23,28 @@ python3.pkgs.buildPythonApplication rec {
     psutil
     evdev
     pynput
+    pyyaml  # NEW: Required for YAML config parsing
   ];
 
   installPhase = ''
     mkdir -p $out/bin
     mkdir -p $out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring
+    mkdir -p $out/share/led-matrix
     
     # Copy Python files
     cp *.py $out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/
     
-    # Copy plugins directory
-    cp -r plugins $out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/
+    # Copy data directories to share
+    cp -r plugins $out/share/led-matrix/
+    cp -r snapshot_files $out/share/led-matrix/
     
-    # Create wrapper script with proper Python environment
-    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput ])}/bin/python $out/bin/led-matrix-monitor \
-      --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/led_system_monitor.py" \
-      --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages"
+    # Copy example config
+    cp config.yaml $out/share/led-matrix/config.example.yaml
+    
+    # Create wrapper script with proper Python environment and config support
+    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput pyyaml ])}/bin/python $out/bin/led-matrix-monitor \
+      --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring/main.py" \
+      --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages/led_matrix_monitoring"
   '';
 
   # Skip tests for now since there aren't any
