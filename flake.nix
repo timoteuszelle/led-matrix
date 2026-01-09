@@ -43,32 +43,128 @@
         let
           cfg = config.services.led-matrix-monitoring;
           led-matrix-monitoring = pkgs.callPackage ./default.nix {};
+          
+          yamlFormat = pkgs.formats.yaml {};
+          
+          # Helper to convert old-style config to YAML
+          legacyToYaml = {
+            duration = 10;
+            quadrants = {
+              top-left = [{
+                app = null;
+                name = cfg.topLeft;
+                duration = 10;
+                animate = false;
+              }];
+              top-right = [{
+                app = null;
+                name = cfg.topRight;
+                duration = 10;
+                animate = false;
+              }];
+              bottom-left = [{
+                app = null;
+                name = cfg.bottomLeft;
+                duration = 10;
+                animate = false;
+              }];
+              bottom-right = [{
+                app = null;
+                name = cfg.bottomRight;
+                duration = 10;
+                animate = false;
+              }];
+            };
+          };
+          
+          # Determine which config to use
+          configFile = 
+            if cfg.configFile != null then cfg.configFile
+            else if cfg.config != null then yamlFormat.generate "led-matrix-config.yaml" cfg.config
+            else if cfg.topLeft != null then yamlFormat.generate "led-matrix-config.yaml" legacyToYaml
+            else throw "services.led-matrix-monitoring: either config, configFile, or legacy options must be set";
         in {
           options.services.led-matrix-monitoring = {
             enable = mkEnableOption "LED Matrix Monitoring service";
 
+            config = mkOption {
+              type = types.nullOr yamlFormat.type;
+              default = null;
+              description = ''
+                Configuration for LED Matrix monitoring as a Nix attrset.
+                This will be converted to YAML. Mutually exclusive with configFile.
+                
+                See example config.yaml in the package for the full schema.
+              '';
+              example = literalExpression ''
+                {
+                  duration = 10;
+                  quadrants = {
+                    top-left = [{
+                      app = {
+                        name = "cpu";
+                        duration = 10;
+                        animate = false;
+                      };
+                    }];
+                    bottom-left = [{
+                      app = {
+                        name = "mem-bat";
+                        duration = 10;
+                        animate = false;
+                      };
+                    }];
+                    top-right = [{
+                      app = {
+                        name = "disk";
+                        duration = 10;
+                        animate = false;
+                      };
+                    }];
+                    bottom-right = [{
+                      app = {
+                        name = "net";
+                        duration = 10;
+                        animate = false;
+                      };
+                    }];
+                  };
+                }
+              '';
+            };
+
+            configFile = mkOption {
+              type = types.nullOr types.path;
+              default = null;
+              description = ''
+                Path to YAML configuration file.
+                Mutually exclusive with config.
+              '';
+            };
+
+            # Legacy options for backward compatibility
             topLeft = mkOption {
-              type = types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ];
-              default = "cpu";
-              description = "Application to display on top-left quadrant";
+              type = types.nullOr (types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ]);
+              default = null;
+              description = ''(DEPRECATED) Application to display on top-left quadrant. Use config or configFile instead.'';
             };
 
             bottomLeft = mkOption {
-              type = types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ];
-              default = "mem-bat";
-              description = "Application to display on bottom-left quadrant";
+              type = types.nullOr (types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ]);
+              default = null;
+              description = ''(DEPRECATED) Application to display on bottom-left quadrant. Use config or configFile instead.'';
             };
 
             topRight = mkOption {
-              type = types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ];
-              default = "disk";
-              description = "Application to display on top-right quadrant";
+              type = types.nullOr (types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ]);
+              default = null;
+              description = ''(DEPRECATED) Application to display on top-right quadrant. Use config or configFile instead.'';
             };
 
             bottomRight = mkOption {
-              type = types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ];
-              default = "net";
-              description = "Application to display on bottom-right quadrant";
+              type = types.nullOr (types.enum [ "cpu" "net" "disk" "mem-bat" "none" "temp" "fan" ]);
+              default = null;
+              description = ''(DEPRECATED) Application to display on bottom-right quadrant. Use config or configFile instead.'';
             };
 
             disableKeyListener = mkOption {
@@ -91,6 +187,18 @@
           };
 
           config = mkIf cfg.enable {
+            # Validation
+            assertions = [
+              {
+                assertion = (cfg.config == null) || (cfg.configFile == null);
+                message = "services.led-matrix-monitoring: config and configFile are mutually exclusive";
+              }
+              {
+                assertion = (cfg.config != null) || (cfg.configFile != null) || (cfg.topLeft != null);
+                message = "services.led-matrix-monitoring: either config, configFile, or legacy options must be set";
+              }
+            ];
+
             environment.systemPackages = [ led-matrix-monitoring ];
 
             systemd.services.led-matrix-monitoring = {
@@ -106,12 +214,14 @@
                 RestartSec = "10s";
               };
 
+              environment = {
+                # Point to the generated or provided config file
+                CONFIG_FILE = configFile;
+              };
+
               script = let
                 args = lib.concatStringsSep " " ([
-                  "--top-left ${cfg.topLeft}"
-                  "--bottom-left ${cfg.bottomLeft}"
-                  "--top-right ${cfg.topRight}"
-                  "--bottom-right ${cfg.bottomRight}"
+                  "-cf ${configFile}"
                 ] ++ lib.optionals cfg.disableKeyListener [ "--no-key-listener" ]
                   ++ lib.optionals cfg.disablePlugins [ "--disable-plugins" ]);
               in ''
