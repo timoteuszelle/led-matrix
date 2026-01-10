@@ -8,7 +8,7 @@ This software is intended for use on a Framework 16 laptop with LED Matrix Panel
 **Operating Systems:** Linux distributions (Ubuntu, Fedora, NixOS, Debian, CentOS, RHEL, and others)  
 **Dependencies:** Python 3.7+ with numpy, psutil, pyserial, and evdev
 
-## Quick Start
+## Quick Start (install the app and run it as a service)
 
 For most users, the fastest way to get started. This installs dependencies, builds the app, installs it as a service, and starts the service:
 
@@ -29,7 +29,7 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
 * Display system performance characteristics in real-time
   * CPU utilization
   * Battery charge level and plug status + memory utilization
-  * Disk Input/Output rates
+  * Disk Input/Output ratesStep by Step 
   * Network Upload/Download rates
   * Temperature sensor readings
   * Fan speeds
@@ -51,12 +51,11 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
  * Plugin capability
  * Automatic device and keyboard detection
  * Snapshot app
-## Installation
 
-### System Package and Python Library Installation (For running manually, e.g. in an IDE)
+## Manual Installation (run the app from the command line in the foreground)
 
-#### For Ubuntu/Debian users:
-* Install [PyEnv](https://github.com/pyenv/pyenv) or any other python virtual environment package
+### For Ubuntu/Debian users:
+* Install [PyEnv](https://github.com/pyenv/pyto test or modify the codeenv) or any other python virtual environment package
 * Commands below work with PyEnv:
 ```bash
 sudo apt update
@@ -69,7 +68,7 @@ python3 -m pip install -r requirements.txt
 python3 led_system_monitor.py
 ```
 
-#### For Fedora users:
+### For Fedora users:
 ```bash
 sudo yum install -y python3-numpy python3-psutil python3-pyserial python3-evdev python3-pynput python3-pyyaml python3-pip
 cd led-matrix-monitoring\
@@ -79,7 +78,7 @@ pyenv activate led-matrix-env
 python3 led_system_monitor.py
 ```
 
-#### For NixOS users:
+### For NixOS users:
 ```bash
 # Using the Nix flake (recommended)
 nix run github:MidnightJava/led-matrix
@@ -89,7 +88,7 @@ nix build
 ./result/bin/led-matrix-monitor
 ```
 
-#### NixOS System Integration
+### NixOS System Integration
 
 For NixOS users who want to run LED matrix monitoring as a system service, additional configuration is required:
 
