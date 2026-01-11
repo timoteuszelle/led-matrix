@@ -55,7 +55,7 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
 ## Manual Installation (run the app from the command line in the foreground)
 
 ### For Ubuntu/Debian users:
-* Install [PyEnv](https://github.com/pyenv/pyto test or modify the codeenv) or any other python virtual environment package
+* Install [PyEnv](https://github.com/pyenv/pyenv) or any other python virtual environment package
 * Commands below work with PyEnv:
 ```bash
 sudo apt update
