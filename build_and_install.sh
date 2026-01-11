@@ -1,3 +1,4 @@
-sudo ./install_deps.sh
+./install_deps.sh
+python -m pip install -r requirements.txt
 python3 -m PyInstaller --onedir --name led_mon --add-data plugins:plugins --add-data snapshot_files:snapshot_files --add-data config.yaml:. --hidden-import=yaml --hidden-import=pynput --clean --noconfirm main.py
-sudo ./install_service.sh
+./install_service.sh
