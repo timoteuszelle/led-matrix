@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 dsp=$DISPLAY
-args="$*"
+xauthority=$XAUTHORITY
 sudo rm -f /etc/systemd/system/fwledmonitor.service
 sudo tee /etc/systemd/system/fwledmonitor.service > /dev/null <<EOF
 [Unit]
@@ -13,9 +13,9 @@ Wants=network-online.target
 Type=simple
 User=led_mon
 Group=led_mon
-Environment=DISPLAY=${dsp} XAUTHORITY=${XAUTHORITY} LOG_LEVEL=debug
+Environment=DISPLAY=${dsp} XAUTHORITY=${xauthority} LOG_LEVEL=debug
 Restart=always
-ExecStartPre=/usr/bin/xhost +local:led_mon
+ExecStartPre=/usr/bin/xhost +SI:localuser:led_mon
 ExecStart=/usr/local/bin/led_mon
 
 StandardOutput=journal
