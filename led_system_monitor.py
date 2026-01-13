@@ -49,7 +49,7 @@ def find_keyboard_device():
                 if has_letters and has_modifiers:
                     return device.path
     except Exception as e:
-        log.warn(f"Warning: Could not auto-detect keyboard device: {e}")
+        log.warning(f"Warning: Could not auto-detect keyboard device: {e}")
     return None
 
 def get_config(config_file):
@@ -104,14 +104,14 @@ def app(args, base_apps, plugin_apps):
                 device = evdev.InputDevice(kbd_path)
                 log.info(f"Using keyboard device: {kbd_path}")
             except (PermissionError, FileNotFoundError, OSError) as e:
-                log.warn(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
-                log.warn("Try running: sudo usermod -a -G input $USER (then log out and back in)")
-                log.warn("Or use --no-key-listener to disable keyboard monitoring.")
+                log.warning(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
+                log.warning("Try running: sudo usermod -a -G input $USER (then log out and back in)")
+                log.warning("Or use --no-key-listener to disable keyboard monitoring.")
                 args.no_key_listener = True
                 device = None
         else:
-            log.warn("Warning: Could not find a suitable keyboard device for evdev monitoring.")
-            log.warn("Key listening will be limited to pynput only (if available).")
+            log.warning("Warning: Could not find a suitable keyboard device for evdev monitoring.")
+            log.warning("Key listening will be limited to pynput only (if available).")
             device = None
 
     ################################################################################
@@ -143,7 +143,7 @@ def app(args, base_apps, plugin_apps):
         log.error("No LED devices found")
         sys.exit(0)
     elif len(led_devices) == 1:
-        log.warn(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
+        log.warning(f"Only one LED device found ({led_devices[0]}). Right panel args will be ignored")
     else:
         log.info(f"Found LED devices: Left: {led_devices[0]}, Right: {led_devices[1]}")
     locations = list(map(lambda x: x[0], led_devices))
@@ -399,7 +399,7 @@ def app(args, base_apps, plugin_apps):
             
     # Informative message if pynput is not available
     if not PYNPUT_AVAILABLE and not args.no_key_listener:
-        log.warn("Info: pynput is unavailable; running in evdev-only mode. Use Ctrl+C to exit.")
+        log.warning("Info: pynput is unavailable; running in evdev-only mode. Use Ctrl+C to exit.")
 
     # Prefer pynput if available; fall back silently if it fails to start (common on Wayland)
     if PYNPUT_AVAILABLE and not args.no_key_listener:
