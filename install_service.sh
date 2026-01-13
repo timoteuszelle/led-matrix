@@ -1,7 +1,9 @@
 #!/bin/bash
 set -x
-dsp=$DISPLAY
+dsp=${DISPLAY:-:0}
 xauthority=$XAUTHORITY
+wayland_display = ${WAYLAND_DISPLAY:-wayland-1}
+
 sudo rm -f /etc/systemd/system/fwledmonitor.service
 sudo tee /etc/systemd/system/fwledmonitor.service > /dev/null <<EOF
 [Unit]
@@ -13,7 +15,7 @@ Wants=network-online.target
 Type=simple
 User=led_mon
 Group=led_mon
-Environment=DISPLAY=${dsp} XAUTHORITY=${xauthority} LOG_LEVEL=debug
+Environment=DISPLAY=${dsp} XAUTHORITY=${xauthority} WAYLAND_DISPLAY=${wayland_display} LOG_LEVEL=debug
 Restart=always
 ExecStartPre=/usr/bin/xhost +SI:localuser:led_mon
 ExecStart=/usr/local/bin/led_mon
@@ -26,7 +28,7 @@ WantedBy=default.target
 EOF
 
 if ! id -u "led_mon" &>/dev/null 2>&1; then
-    sudo useradd   --system   --home /var/lib/led_mon  -G input -G dialout --shell /usr/sbin/nologin   led_mon
+    sudo useradd   --system   --home /var/lib/led_mon  -G input,dialout --shell /usr/sbin/nologin   led_mon
 fi
 
 sudo mkdir -p /opt/led_mon
