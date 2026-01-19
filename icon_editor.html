@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LED Matrix Icon Editor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #4fc3f7;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .canvas-container {
+            flex: 1;
+            min-width: 400px;
+        }
+        .controls {
+            flex: 0 0 300px;
+            background: #2d2d2d;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        canvas {
+            border: 2px solid #4fc3f7;
+            cursor: crosshair;
+            background: #000;
+            image-rendering: pixelated;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+        button {
+            background: #4fc3f7;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #29b6f6;
+        }
+        button.secondary {
+            background: #555;
+            color: #fff;
+        }
+        button.secondary:hover {
+            background: #666;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        select, input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            border: 1px solid #4fc3f7;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .intensity-display {
+            text-align: center;
+            font-size: 24px;
+            margin: 10px 0;
+            color: #4fc3f7;
+        }
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .preset-buttons button {
+            margin: 0;
+        }
+        #output {
+            background: #1e1e1e;
+            border: 1px solid #4fc3f7;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            white-space: pre;
+        }
+        .info {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔲 LED Matrix Icon Editor</h1>
+    <p class="subtitle">Draw icons for LED matrix display • Export to JSON</p>
+    
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="canvas" width="680" height="180"></canvas>
+            <div class="info">
+                🖱️ Left click: Draw • Right click: Erase • Drag to paint
+            </div>
+            <div id="output"></div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Canvas Size</label>
+                <select id="sizeSelect">
+                    <option value="7,15">Small (7x15) - Single Panel</option>
+                    <option value="9,34">Large (9x34) - Full Panel</option>
+                    <option value="9,68">XL (9x68) - Dual Panel</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Draw Intensity</label>
+                <input type="range" id="intensity" min="0" max="255" value="255">
+                <div class="intensity-display" id="intensityDisplay">255</div>
+            </div>
+            
+            <div class="control-group">
+                <label>Preset Intensities</label>
+                <div class="preset-buttons">
+                    <button class="secondary" onclick="setIntensity(0)">Off (0)</button>
+                    <button class="secondary" onclick="setIntensity(63)">Low (63)</button>
+                    <button class="secondary" onclick="setIntensity(127)">Med (127)</button>
+                    <button class="secondary" onclick="setIntensity(191)">High (191)</button>
+                    <button class="secondary" onclick="setIntensity(255)">Max (255)</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>Actions</label>
+                <button onclick="clearCanvas()">🗑️ Clear Canvas</button>
+                <button onclick="fillCanvas()">⬜ Fill Canvas</button>
+                <button onclick="invertCanvas()">🔄 Invert</button>
+            </div>
+            
+            <div class="control-group">
+                <label>Export</label>
+                <button onclick="generateJSON()">📄 Generate JSON</button>
+                <button onclick="downloadJSON()">⬇️ Download JSON</button>
+                <button class="secondary" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+            </div>
+            
+            <div class="info">
+                💡 Tip: Use this to create custom icons for your LED matrix monitoring app!
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const intensitySlider = document.getElementById('intensity');
+        const intensityDisplay = document.getElementById('intensityDisplay');
+        const sizeSelect = document.getElementById('sizeSelect');
+        const outputDiv = document.getElementById('output');
+        
+        let gridWidth = 7;
+        let gridHeight = 15;
+        let cellSize = 20;
+        let grid = [];
+        let isDrawing = false;
+        let currentIntensity = 255;
+        let lastJSON = '';
+        
+        // Initialize
+        initializeGrid();
+        updateCanvasSize();
+        draw();
+        
+        // Event listeners
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        intensitySlider.addEventListener('input', (e) => {
+            currentIntensity = parseInt(e.target.value);
+            intensityDisplay.textContent = currentIntensity;
+        });
+        
+        sizeSelect.addEventListener('change', () => {
+            const [w, h] = sizeSelect.value.split(',').map(Number);
+            gridWidth = w;
+            gridHeight = h;
+            initializeGrid();
+            updateCanvasSize();
+            draw();
+        });
+        
+        function initializeGrid() {
+            grid = Array(gridHeight).fill(0).map(() => Array(gridWidth).fill(0));
+        }
+        
+        function updateCanvasSize() {
+            cellSize = Math.min(
+                Math.floor(680 / gridWidth),
+                Math.floor(400 / gridHeight)
+            );
+            canvas.width = gridWidth * cellSize;
+            canvas.height = gridHeight * cellSize;
+            draw();
+        }
+        
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const value = grid[y][x];
+                    const intensity = Math.floor((value / 255) * 255);
+                    ctx.fillStyle = `rgb(${intensity}, ${intensity}, ${intensity})`;
+                    ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+                }
+            }
+        }
+        
+        function getCellFromEvent(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+            return { x, y };
+        }
+        
+        function startDrawing(e) {
+            isDrawing = true;
+            const { x, y } = getCellFromEvent(e);
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                if (e.button === 0) { // Left click
+                    grid[y][x] = currentIntensity;
+                } else if (e.button === 2) { // Right click
+                    grid[y][x] = 0;
+                }
+                draw();
+            }
+        }
+        
+        function onMouseMove(e) {
+            if (!isDrawing) return;
+            const { x, y } = getCellFromEvent(e);
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                if (e.buttons === 1) { // Left button
+                    grid[y][x] = currentIntensity;
+                } else if (e.buttons === 2) { // Right button
+                    grid[y][x] = 0;
+                }
+                draw();
+            }
+        }
+        
+        function stopDrawing() {
+            isDrawing = false;
+        }
+        
+        function clearCanvas() {
+            initializeGrid();
+            draw();
+        }
+        
+        function fillCanvas() {
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    grid[y][x] = currentIntensity;
+                }
+            }
+            draw();
+        }
+        
+        function invertCanvas() {
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    grid[y][x] = 255 - grid[y][x];
+                }
+            }
+            draw();
+        }
+        
+        function setIntensity(value) {
+            currentIntensity = value;
+            intensitySlider.value = value;
+            intensityDisplay.textContent = value;
+        }
+        
+        function generateJSON() {
+            // Transpose: icon_renderer.py expects transposed format
+            const transposed = [];
+            for (let x = 0; x < gridWidth; x++) {
+                const column = [];
+                for (let y = 0; y < gridHeight; y++) {
+                    column.push(grid[y][x]);
+                }
+                transposed.push(column);
+            }
+            
+            lastJSON = JSON.stringify(transposed, null, 2);
+            outputDiv.textContent = lastJSON;
+            return lastJSON;
+        }
+        
+        function downloadJSON() {
+            const json = generateJSON();
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `icon_${gridWidth}x${gridHeight}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function copyToClipboard() {
+            const json = generateJSON();
+            navigator.clipboard.writeText(json).then(() => {
+                alert('✓ JSON copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>
+
