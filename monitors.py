@@ -164,5 +164,92 @@ def get_monitor_brightness():
         # Reasonable default if anything goes wrong
         return 1.0
 
+class ScreenLockMonitor:
+    """Monitor screen lock state using loginctl (for Linux/systemd systems)"""
+    
+    def __init__(self, method='auto', poll_interval=1.0, force_state='auto'):
+        """
+        Initialize screen lock monitor
+        
+        Args:
+            method: Detection method ('auto' or 'loginctl')
+            poll_interval: Polling interval in seconds
+            force_state: Force lock state for testing ('auto', 'locked', or 'unlocked')
+        """
+        self.method = method
+        self.poll_interval = poll_interval
+        self.force_state = force_state
+        self._locked = False
+        self._stop = None
+        self._thread = None
+    
+    def start(self):
+        """Start monitoring in background thread"""
+        import threading
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+    
+    def stop(self):
+        """Stop monitoring"""
+        if self._stop:
+            self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=1)
+    
+    def is_locked(self) -> bool:
+        """Check if screen is currently locked"""
+        return self._locked
+    
+    def _run(self):
+        """Background polling loop"""
+        while not self._stop.is_set():
+            self._locked = self._compute_locked()
+            self._stop.wait(self.poll_interval)
+    
+    def _compute_locked(self) -> bool:
+        """Determine current lock state"""
+        # Handle forced state (for testing)
+        if self.force_state in ('locked', 'unlocked'):
+            return self.force_state == 'locked'
+        
+        # Get session ID
+        import subprocess
+        sess = os.getenv('XDG_SESSION_ID')
+        if not sess:
+            sess = self._detect_session_id()
+        if not sess:
+            return False
+        
+        # Query loginctl for lock state
+        try:
+            out = subprocess.check_output(
+                ['loginctl', 'show-session', str(sess), '-p', 'LockedHint'],
+                text=True,
+                stderr=subprocess.DEVNULL
+            ).strip()
+            val = out.split('=', 1)[-1].strip().lower()
+            return val in ('yes', 'true', '1')
+        except Exception:
+            return False
+    
+    def _detect_session_id(self):
+        """Detect current session ID from loginctl"""
+        import subprocess
+        try:
+            uid = os.getuid()
+            out = subprocess.check_output(
+                ['loginctl', 'list-sessions', '--no-legend'],
+                text=True
+            )
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 3 and parts[2] == str(uid):
+                    return parts[0]
+        except Exception:
+            pass
+        return None
+
+
 if __name__ == "__main__":
     print(get_monitor_brightness())

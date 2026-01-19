@@ -42,3 +42,14 @@ def do_animate(s, animate=False, with_response=False):
     if with_response:
         res = s.read(1)
         return res
+
+def set_display_on(s, on=True):
+    """
+    Turn LED matrix display on or off
+    
+    Args:
+        s: Serial connection
+        on: True to turn display on, False to turn it off
+    """
+    message = bytearray([0x32, 0xAC, Commands.DisplayOn, 1 if on else 0])
+    s.write(message)
