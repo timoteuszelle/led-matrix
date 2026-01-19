@@ -142,8 +142,16 @@
                 <select id="sizeSelect">
                     <option value="7,15">Small (7x15) - Single Panel</option>
                     <option value="9,34">Large (9x34) - Full Panel</option>
-                    <option value="9,68">XL (9x68) - Dual Panel</option>
+                    <option value="9,68">XL (9x68) - Dual Panel Combined</option>
                 </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Dual Panel View</label>
+                <button id="toggleDualView" class="secondary" onclick="toggleDualPanelView()">👁️ Show Dual Panel Split</button>
+                <div class="info" id="dualInfo" style="display:none; margin-top:10px;">
+                    Visualizing as 2 separate 9x34 panels
+                </div>
             </div>
             
             <div class="control-group">
@@ -198,6 +206,7 @@
         let isDrawing = false;
         let currentIntensity = 255;
         let lastJSON = '';
+        let showDualPanelSplit = false;
         
         // Initialize
         initializeGrid();
@@ -250,6 +259,25 @@
                     ctx.fillStyle = `rgb(${intensity}, ${intensity}, ${intensity})`;
                     ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
                 }
+            }
+            
+            // Draw dual panel split line if enabled and width is 68 (9x68)
+            if (showDualPanelSplit && gridWidth === 68) {
+                const midX = Math.floor(gridWidth / 2) * cellSize;
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(midX, 0);
+                ctx.lineTo(midX, canvas.height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Add labels
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fillText('LEFT', 10, 20);
+                ctx.fillText('RIGHT', midX + 10, 20);
             }
         }
         
@@ -355,6 +383,68 @@
             }).catch(err => {
                 alert('Failed to copy: ' + err);
             });
+        }
+        
+        function toggleDualPanelView() {
+            const btn = document.getElementById('toggleDualView');
+            const info = document.getElementById('dualInfo');
+            
+            if (gridWidth !== 68) {
+                alert('Dual panel view only available for 9x68 (Dual Panel Combined) size');
+                return;
+            }
+            
+            showDualPanelSplit = !showDualPanelSplit;
+            
+            if (showDualPanelSplit) {
+                btn.textContent = '👁️ Hide Dual Panel Split';
+                info.style.display = 'block';
+            } else {
+                btn.textContent = '👁️ Show Dual Panel Split';
+                info.style.display = 'none';
+            }
+            
+            draw();
+        }
+        
+        function exportDualPanelJSON() {
+            if (gridWidth !== 68) {
+                alert('This export only works for 9x68 dual panel size');
+                return;
+            }
+            
+            // Split into left (first 34 columns) and right (last 34 columns)
+            const leftGrid = [];
+            const rightGrid = [];
+            
+            for (let y = 0; y < gridHeight; y++) {
+                leftGrid[y] = grid[y].slice(0, 34);
+                rightGrid[y] = grid[y].slice(34, 68);
+            }
+            
+            // Transpose both
+            const leftTransposed = [];
+            for (let x = 0; x < 34; x++) {
+                const column = [];
+                for (let y = 0; y < gridHeight; y++) {
+                    column.push(leftGrid[y][x]);
+                }
+                leftTransposed.push(column);
+            }
+            
+            const rightTransposed = [];
+            for (let x = 0; x < 34; x++) {
+                const column = [];
+                for (let y = 0; y < gridHeight; y++) {
+                    column.push(rightGrid[y][x]);
+                }
+                rightTransposed.push(column);
+            }
+            
+            return {
+                left: leftTransposed,
+                right: rightTransposed
+            };
         }
     </script>
 </body>
