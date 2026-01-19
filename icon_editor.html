@@ -142,7 +142,7 @@
                 <select id="sizeSelect">
                     <option value="7,15">Small (7x15) - Single Panel</option>
                     <option value="9,34">Large (9x34) - Full Panel</option>
-                    <option value="68,9">XL (68x9) - Dual Panel Side-by-Side</option>
+                    <option value="18,34">XL (18x34) - Dual Panel Side-by-Side</option>
                 </select>
             </div>
             
@@ -150,7 +150,7 @@
                 <label>Dual Panel View</label>
                 <button id="toggleDualView" class="secondary" onclick="toggleDualPanelView()">👁️ Show Dual Panel Split</button>
                 <div class="info" id="dualInfo" style="display:none; margin-top:10px;">
-                    Visualizing as 2 panels (LEFT | RIGHT) side-by-side
+                    Visualizing as 2 panels side-by-side (LEFT | RIGHT)
                 </div>
             </div>
             
@@ -262,10 +262,9 @@
             }
             
             // Draw dual panel split line if enabled
-            // Panels are 9x34 each, side-by-side horizontally (9 wide, 68 tall total -> wrong!)
-            // Actually they're 9 tall, 34 wide each, placed side-by-side
-            // So for dual: 9 tall, 68 wide (2 x 34 wide panels)
-            if (showDualPanelSplit && (gridWidth === 68 && gridHeight === 9)) {
+            // Panels are 9x34 each, side-by-side horizontally
+            // So for dual: 18 wide, 34 tall (2 x 9 wide panels)
+            if (showDualPanelSplit && (gridWidth === 18 && gridHeight === 34)) {
                 const midX = Math.floor(gridWidth / 2) * cellSize;
                 ctx.strokeStyle = '#ff6b6b';
                 ctx.lineWidth = 3;
@@ -394,8 +393,8 @@
             const btn = document.getElementById('toggleDualView');
             const info = document.getElementById('dualInfo');
             
-            if (!(gridWidth === 68 && gridHeight === 9)) {
-                alert('Dual panel view only available for 9x68 (Dual Panel Side-by-Side) size.\nCurrent size: ' + gridWidth + 'x' + gridHeight);
+            if (!(gridWidth === 18 && gridHeight === 34)) {
+                alert('Dual panel view only available for 18x34 (Dual Panel Side-by-Side) size.\nCurrent size: ' + gridWidth + 'x' + gridHeight);
                 return;
             }
             
@@ -413,23 +412,23 @@
         }
         
         function exportDualPanelJSON() {
-            if (!(gridWidth === 68 && gridHeight === 9)) {
-                alert('This export only works for 9x68 dual panel size');
+            if (!(gridWidth === 18 && gridHeight === 34)) {
+                alert('This export only works for 18x34 dual panel size');
                 return;
             }
             
-            // Split into left (first 34 columns) and right (last 34 columns)
+            // Split into left (first 9 columns) and right (last 9 columns)
             const leftGrid = [];
             const rightGrid = [];
             
             for (let y = 0; y < gridHeight; y++) {
-                leftGrid[y] = grid[y].slice(0, 34);
-                rightGrid[y] = grid[y].slice(34, 68);
+                leftGrid[y] = grid[y].slice(0, 9);
+                rightGrid[y] = grid[y].slice(9, 18);
             }
             
             // Transpose both
             const leftTransposed = [];
-            for (let x = 0; x < 34; x++) {
+            for (let x = 0; x < 9; x++) {
                 const column = [];
                 for (let y = 0; y < gridHeight; y++) {
                     column.push(leftGrid[y][x]);
@@ -438,7 +437,7 @@
             }
             
             const rightTransposed = [];
-            for (let x = 0; x < 34; x++) {
+            for (let x = 0; x < 9; x++) {
                 const column = [];
                 for (let y = 0; y < gridHeight; y++) {
                     column.push(rightGrid[y][x]);
