@@ -18,7 +18,7 @@ led-matrix-monitoring = {
 
 ## Changelog
 gn
-### v2.1.1 (2026-02-20)
+### v2.1.1 (2026-03-01)
 - **Weather widget enhancements**
   - Support multiple weather measures (temp/condition, wind chill, wind speed/direction)
   - Cycle between specified measures automatically
