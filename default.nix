@@ -27,7 +27,7 @@ python3.pkgs.buildPythonApplication rec {
     python-dotenv  # Required for environment variable loading
     requests  # Required for time_weather_plugin
     scipy # Required for equalizer plugin
-    sounddevic # Required for equalizer plugin
+    sounddevice # Required for equalizer plugin
     pulsectl # Required for equalizer plugin
     # Note: iplocate is not available in nixpkgs - time_weather_plugin will need to handle this gracefully
   ];
