@@ -52,7 +52,7 @@ python3.pkgs.buildPythonApplication rec {
     cp .env-example $out/share/led-matrix/.env-example
     
     # Create wrapper script with proper Python environment
-    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput pyyaml python-dotenv requests ])}/bin/python $out/bin/led-matrix-monitor \
+    makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput pyyaml python-dotenv requests scipy sounddevice pulsectl ])}/bin/python $out/bin/led-matrix-monitor \
       --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/main.py" \
       --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages"
   '';
