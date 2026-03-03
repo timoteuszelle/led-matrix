@@ -207,7 +207,6 @@ class Equalizer():
             log.error("The executable file inputmodule-control was not found on the executable Path. The equalizer will not run.")
             return
         self.device_name = device_name
-        log.debug(f"Run equalizer on device {device_name}")
         global base_time
         base_time = time.time()
         
