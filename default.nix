@@ -46,7 +46,7 @@ python3.pkgs.buildPythonApplication rec {
     
     # Copy example config and .env to share for reference
     cp led_mon/config.yaml $out/share/led-matrix/config.example.yaml
-    cp led_mon/.env-example $out/share/led-matrix/.env-example
+    cp .env-example $out/share/led-matrix/.env-example
     
     # Create wrapper script with proper Python environment
     makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput pyyaml python-dotenv requests ])}/bin/python $out/bin/led-matrix-monitor \
