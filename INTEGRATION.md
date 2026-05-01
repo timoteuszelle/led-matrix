@@ -22,7 +22,7 @@ In `/home/tim/zaneyos/flake.nix`, add this as an input:
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
     led-matrix-monitoring = {
-      url = "github:timoteuszelle/led-matrix/fix/robustness-and-permission-handling";
+      url = "github:timoteuszelle/led-matrix/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -49,6 +49,7 @@ In `$HOME/zaneyos/profiles/amd/default.nix`:
     ../../modules/drivers
     ../../modules/core
     inputs.led-matrix-monitoring.nixosModules.led-matrix-monitoring # Add this line
+    # or inputs.led-matrix-monitoring.nixosModules.ledmatrixmonitoring
   ];
   # Enable GPU Drivers
   drivers.amdgpu.enable = true;
@@ -86,19 +87,26 @@ Add the service configuration to `/home/tim/zaneyos/modules/core/services.nix`:
 # Add this to the existing services.nix file
 services.led-matrix-monitoring = {
   enable = true;
-  
-  # Configure what shows in each quadrant
-  topLeft = "cpu";
-  bottomLeft = "mem-bat";
-  topRight = "disk";
-  bottomRight = "net";
-  
+
+  # linuxOS | nix-flake | nix-module
+  configurationMode = "nix-module";
+
+  layout = {
+    duration = 10;
+    quadrants = {
+      topLeft = [{ name = "cpu"; }];
+      bottomLeft = [{ name = "mem-bat"; }];
+      topRight = [{ name = "disk"; }];
+      bottomRight = [{ name = "net"; }];
+    };
+  };
   # Optional: disable keyboard listener if you don't want Alt+I shortcut
   # disableKeyListener = true;
-  
   # Optional: disable plugins
   # disablePlugins = true;
-  
+
+  # Optional: environment override for display server access
+  # environment.DISPLAY = ":0";
   # Optional: run as a different user (default is root)
   # user = "tim";
 };
@@ -112,13 +120,18 @@ Create `$HOME/zaneyos/modules/core/led-matrix.nix`:
 {...}: {
   services.led-matrix-monitoring = {
     enable = true;
-    
-    # Configure what shows in each quadrant
-    topLeft = "cpu";
-    bottomLeft = "mem-bat";
-    topRight = "disk";
-    bottomRight = "net";
-    
+
+    configurationMode = "nix-module";
+
+    layout = {
+      duration = 10;
+      quadrants = {
+        topLeft = [{ name = "cpu"; }];
+        bottomLeft = [{ name = "mem-bat"; }];
+        topRight = [{ name = "disk"; }];
+        bottomRight = [{ name = "net"; }];
+      };
+    };
     # Optional settings
     # disableKeyListener = false;
     # disablePlugins = false;
@@ -146,14 +159,15 @@ Then add it to `$HOME/zaneyos/modules/core/default.nix`:
 
 ## Configuration Options
 
-The service supports these quadrant options:
-- `cpu`: CPU utilization
-- `net`: Network upload/download rates  
-- `disk`: Disk I/O rates
-- `mem-bat`: Memory utilization and battery status
-- `temp`: Temperature sensors
-- `fan`: Fan speeds
-- `none`: Disable quadrant
+Recommended options:
+- `configurationMode = "nix-module"` (or `nix-flake`)
+- `layout.duration`
+- `layout.quadrants.topLeft|bottomLeft|topRight|bottomRight`
+- each app item supports `name`, `duration`, `animate`, `scope`, `persistentDraw`, `disposeFn`, `display`, and `args`
+
+Compatibility options are still available:
+- `settings` / `config` / `configFile`
+- legacy shorthand `topLeft`, `bottomLeft`, `topRight`, `bottomRight`
 
 ## Building and Testing
 
@@ -182,7 +196,7 @@ After making the changes:
 
 ## User Permissions
 
-If you want to use the keyboard listener (Alt+I shortcut) and run as a non-root user, the service will automatically add your user to the `input` group. Consider the security implications of this.
+If you run as a non-root user and keep key listening enabled, the service adds the `input` supplementary group at service runtime. Consider the security implications of keyboard device access.
 
 ## Development
 

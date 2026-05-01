@@ -88,7 +88,7 @@ python -m led_mon.led_system_monitor
 ### For NixOS users:
 ```bash
 # Using the Nix flake (recommended)
-nix run github:MidnightJava/led-matrix
+nix run github:timoteuszelle/led-matrix/main
 
 # Or build locally
 nix build
@@ -96,77 +96,58 @@ nix build
 ```
 
 ### NixOS System Integration
+For NixOS users who want to run LED matrix monitoring as a system service, use the standalone module from this repository.
 
-For NixOS users who want to run LED matrix monitoring as a system service, additional configuration is required:
-
-**1. Add to your flake.nix inputs:**
+**1. Add flake input:**
 ```nix
 {
   inputs = {
     # ... other inputs
-    led-matrix-monitoring.url = "github:MidnightJava/led-matrix";
+    led-matrix-monitoring.url = "github:timoteuszelle/led-matrix/main";
   };
 }
 ```
 
-**2. Import the module in your NixOS configuration:**
+**2. Import module:**
 ```nix
 {
   imports = [
     inputs.led-matrix-monitoring.nixosModules.led-matrix-monitoring
+    # or: inputs.led-matrix-monitoring.nixosModules.ledmatrixmonitoring
   ];
 }
 ```
 
-**3. Enable and configure the service:**
+**3. Configure service (recommended Nix-native schema):**
 ```nix
 services.led-matrix-monitoring = {
   enable = true;
-  topLeft = "cpu";
-  bottomLeft = "mem-bat";
-  topRight = "disk";
-  bottomRight = "net";
-  disableKeyListener = true;  # Recommended for system service
-  user = "your-username";
+  configurationMode = "nix-module"; # linuxOS | nix-flake | nix-module
+
+  layout = {
+    duration = 10;
+    quadrants = {
+      topLeft = [{ name = "cpu"; }];
+      bottomLeft = [{ name = "mem-bat"; }];
+      topRight = [{ name = "disk"; }];
+      bottomRight = [{ name = "net"; }];
+    };
+  };
+
+  # Optional for graphical sessions:
+  # environment.DISPLAY = ":0";
 };
 ```
 
-**4. Add systemd service environment override (Required):**
-
-The service needs access to the display server. Add this to your NixOS configuration:
-
-```nix
-# Override the LED matrix monitoring service to add DISPLAY environment variable
-systemd.services.led-matrix-monitoring = {
-  environment = {
-    DISPLAY = ":0";  # Adjust if using different display
-  };
-  serviceConfig = {
-    # Ensure the service waits for the graphical session
-    After = [ "graphical-session.target" ];
-    Wants = [ "graphical-session.target" ];
-  };
-};
-```
-
-**5. Rebuild your system:**
+**4. Rebuild your system:**
 ```bash
 sudo nixos-rebuild switch
 ```
 
 **Troubleshooting NixOS Service Issues:**
-
-If the service fails to start with display connection errors:
-
 ```bash
-# Check service status
-systemctl --user status led-matrix-monitoring
-
-# View logs
-journalctl --user -u led-matrix-monitoring -f
-
-# Common error: "failed to acquire X connection: Bad display name"
-# Solution: Ensure DISPLAY environment variable is set in service override
+systemctl status led-matrix-monitoring
+journalctl -u led-matrix-monitoring -f
 ```
 
 **Alternative: Systemd Service (Advanced)**
