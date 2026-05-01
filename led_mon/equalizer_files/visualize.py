@@ -59,8 +59,13 @@ UPDATE_RATE = 0.03 # 33 fps
 # 9 frequency bands (If you use an EasyEffects filter, match the centers as closely as possible)
 BAND_CENTERS = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000]  # Hz
 Q = 1.414
+INPUTMODULE_CONTROL_APP = shutil.which('inputmodule-control')
+# Backward-compatible alias
+MODUE_CONTROL_APP = INPUTMODULE_CONTROL_APP
+PACTL_APP = shutil.which('pactl')
 
-MODUE_CONTROL_APP = shutil.which('inputmodule-control')
+def has_inputmodule_control():
+    return bool(INPUTMODULE_CONTROL_APP and Path(INPUTMODULE_CONTROL_APP).is_file())
 
 # Pre-compute bandpass filters (used in python file mode)
 filters = []
@@ -104,11 +109,13 @@ def get_notification_pattern(source):
         return 'gradient'
     
 def draw_source_change_cue(source):
+    if not has_inputmodule_control():
+        return
     pattern = get_notification_pattern(source)
     devices= discover_led_devices()
     # Only one instance will usually detect the source change, so it notifies both devices
     cmd_1 = [
-            MODUE_CONTROL_APP,
+            INPUTMODULE_CONTROL_APP,
             '--serial-dev', devices[0][1],
             'led-matrix',
             '--pattern',
@@ -116,7 +123,7 @@ def draw_source_change_cue(source):
     ]
     if len(devices) > 1:
         cmd_2 = [
-                MODUE_CONTROL_APP,
+                INPUTMODULE_CONTROL_APP,
                 '--serial-dev', devices[1][1],
                 'led-matrix',
                 '--pattern',
@@ -144,19 +151,27 @@ class Equalizer():
     
     def __init__(self, device_location):
         self.done = False
+        self.device_name = None
         self.queue = queue.Queue(2)
         self.drawing_thread = DrawingThread(device_location, self.queue)
         self.drawing_thread.start()
         
     def stop(self):
-        self.done = True
-        self.queue.put(None)  # Sentinel to stop DrawingThread
-        log.debug(f"Stop equalizer on device {self.device_name}")
+        if not self.done:
+            self.done = True
+            self.queue.put(None)  # Sentinel to stop DrawingThread
+        device_name = self.device_name if self.device_name else "<unknown>"
+        log.debug(f"Stop equalizer on device {device_name}")
     
     # Pipewire is supposed to automatically make the default source track the default sink's monitor, but the
     # capability is fragile and can sometimes be permanently broken. So we track sink changes and set the default
     # source to its monitor, to ensure continued data flow. We also draw a visual cue identifying the new source.
     def force_monitor_source(self):
+        if not PACTL_APP:
+            if not hasattr(self, '_pactl_missing_logged'):
+                self._pactl_missing_logged = True
+                log.warning("pactl was not found on PATH; skipping monitor-source auto-sync for equalizer.")
+            return
         last_known_sink = None
         try:
             current_sink = get_default_device(DeviceType.SINK)
@@ -172,7 +187,7 @@ class Equalizer():
             if current_source != expected_source and current_source is not None:
                 log.info(f"New sink detected: {current_sink}")
                 subprocess.run(
-                    ['pactl', 'set-default-source', expected_source],
+                    [PACTL_APP, 'set-default-source', expected_source],
                     check=True,
                     capture_output=True,
                     text=True
@@ -203,10 +218,11 @@ class Equalizer():
         self.queue.put((grid, False))
 
     def run(self, channel, external_filter, device_name):
-        if not MODUE_CONTROL_APP or not Path(MODUE_CONTROL_APP).is_file():
-            log.error("The executable file inputmodule-control was not found on the executable Path. The equalizer will not run.")
-            return
         self.device_name = device_name
+        if not has_inputmodule_control():
+            log.error("The executable file inputmodule-control was not found on the executable Path. The equalizer will not run.")
+            self.stop()
+            return False
         global base_time
         base_time = time.time()
         
@@ -239,7 +255,7 @@ class Equalizer():
                         levels.append(level)
 
                 cmd = [
-                    MODUE_CONTROL_APP,
+                    INPUTMODULE_CONTROL_APP,
                     '--serial-dev', device_name,
                     'led-matrix',
                     '--eq',
@@ -275,6 +291,7 @@ class Equalizer():
                 self.cleanup()
             finally:
                 self.stream = None
+        return True
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LED Matrix Audio Visualizer - Single Channel")

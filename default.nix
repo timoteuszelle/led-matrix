@@ -2,6 +2,8 @@
 , python3
 , fetchFromGitHub
 , makeWrapper
+, inputmodule-control
+, pulseaudio
 }:
 
 python3.pkgs.buildPythonApplication rec {
@@ -29,6 +31,7 @@ python3.pkgs.buildPythonApplication rec {
     scipy # Required for equalizer plugin
     sounddevice # Required for equalizer plugin
     pulsectl # Required for equalizer plugin
+    inputmodule-control # Required runtime binary for equalizer plugin LED output
     # Note: iplocate is not available in nixpkgs - time_weather_plugin will need to handle this gracefully
   ];
 
@@ -36,25 +39,26 @@ python3.pkgs.buildPythonApplication rec {
     mkdir -p $out/bin
     mkdir -p $out/lib/python${python3.pythonVersion}/site-packages
     mkdir -p $out/share/led-matrix
-    
+
     # Copy the entire led_mon module
     cp -r led_mon $out/lib/python${python3.pythonVersion}/site-packages/
-    
+
     # Note: time_weather_plugin is included - iplocate import is lazy-loaded inside a function,
     # so the plugin will work for zip/lat-lon lookups even without iplocate package.
     # IP-based location lookup will fail gracefully if iplocate is not available.
-    
+
     # Copy main.py to the package root
     cp main.py $out/lib/python${python3.pythonVersion}/site-packages/
-    
+
     # Copy example config and .env to share for reference
     cp led_mon/config.yaml $out/share/led-matrix/config.example.yaml
     cp .env-example $out/share/led-matrix/.env-example
-    
+
     # Create wrapper script with proper Python environment
     makeWrapper ${python3.withPackages (ps: with ps; [ pyserial numpy psutil evdev pynput pyyaml python-dotenv requests scipy sounddevice pulsectl ])}/bin/python $out/bin/led-matrix-monitor \
       --add-flags "$out/lib/python${python3.pythonVersion}/site-packages/main.py" \
-      --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages"
+      --prefix PYTHONPATH : "$out/lib/python${python3.pythonVersion}/site-packages" \
+      --prefix PATH : "${lib.makeBinPath [ inputmodule-control pulseaudio ]}"
   '';
 
   # Skip tests for now since there aren't any

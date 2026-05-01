@@ -1,14 +1,14 @@
 # Built In Dependencies
-from statistics import mean
 import os
 import numpy as np
 import threading
 import logging
+import time
 
 # Internal dependencies
 from led_mon.patterns import letters_5_x_6, numerals
 from led_mon import drawing
-from led_mon.equalizer_files.visualize import Equalizer
+from led_mon.equalizer_files.visualize import Equalizer, has_inputmodule_control
 from led_mon.shared_state import discover_led_devices
 
 log = logging.getLogger(__name__)
@@ -25,35 +25,63 @@ log.setLevel(log_level)
 ####  Monitor functions ####
 
 equalizers = {}
+equalizer_retry_after = {}
+EQUALIZER_RETRY_BACKOFF_SEC = 30
 
 def run_equalizer(_, grid, foreground_value, idx, **kwargs):
-    external_filter = kwargs['external-filter']
-    side = kwargs['side']
-    # device => ('<port>', '<name>')
-    devices: tuple[str, str] = discover_led_devices()
-    if side == 'left':
-        channel = 0
-        device = devices[0]
-    elif side == 'right':
-        channel = 1
-        device = devices[1]
-    else:
-        log.error(f"Unexpected device arg {kwargs['device']}")
-    if not side in equalizers:
-        equalizers[side] = Equalizer(device_location = device[0])
-        eq_thread = threading.Thread(target=lambda: equalizers[side].run(channel=channel, external_filter=external_filter, device_name=device[1]), daemon=True)
-        eq_thread.start()
+    external_filter = kwargs.get('external-filter', False)
+    side = kwargs.get('side', None)
+    if side not in ('left', 'right'):
+        log.error(f"Unexpected equalizer side arg '{side}'. Expected 'left' or 'right'.")
+        return
+
+    if not has_inputmodule_control():
+        log.error("inputmodule-control is not available on PATH. Skipping equalizer startup.")
+        return
+
+    if side in equalizers:
+        return
+    if time.time() < equalizer_retry_after.get(side, 0):
+        return
+
+    # device tuple => ('<location>', '<serial device>')
+    devices: tuple[str, str] = discover_led_devices() or []
+    channel = 0 if side == 'left' else 1
+    if len(devices) <= channel:
+        log.warning(f"Equalizer requested for {side} side, but matching LED device was not discovered.")
+        return
+    device = devices[channel]
+
+    eq = Equalizer(device_location=device[0])
+    equalizers[side] = eq
+
+    def _run():
+        try:
+            ok = eq.run(channel=channel, external_filter=external_filter, device_name=device[1])
+            if ok is False:
+                equalizer_retry_after[side] = time.time() + EQUALIZER_RETRY_BACKOFF_SEC
+        except Exception as e:
+            log.error(f"Equalizer runtime error on {side} side: {e}")
+            equalizer_retry_after[side] = time.time() + EQUALIZER_RETRY_BACKOFF_SEC
+        finally:
+            if equalizers.get(side) is eq:
+                del equalizers[side]
+
+    eq_thread = threading.Thread(target=_run, daemon=True)
+    eq_thread.start()
     if len(equalizers) > 2:
         log.info(f"run_equalizer: Active equalizers: {len(equalizers)}")
     
 def dispose_equalizer(**kwargs):
-    side = kwargs['side']
-    if side in equalizers:
-        equalizers[side].stop()
-        # Optional (if resource leak found): Join to ensure clean exit
-        # But since daemon, not strictly needed; helps for debugging
-        # equalizers[side].drawing_thread.join(timeout=2)
-        del equalizers[side]
+    side = kwargs.get('side', None)
+    if side is None:
+        log.error("dispose_equalizer called without required 'side' arg.")
+        return
+
+    eq = equalizers.pop(side, None)
+    if eq is not None:
+        eq.stop()
+    equalizer_retry_after.pop(side, None)
     if len(equalizers) > 2:
         log.info(f"dispose_equalizer: Active equalizers: {len(equalizers)}")
 
