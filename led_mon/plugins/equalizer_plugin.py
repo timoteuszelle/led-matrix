@@ -28,9 +28,45 @@ equalizers = {}
 equalizer_retry_after = {}
 EQUALIZER_RETRY_BACKOFF_SEC = 30
 
+def parse_float_arg(kwargs, key, default):
+    value = kwargs.get(key, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        log.warning(f"Invalid equalizer arg '{key}={value}', using default {default}.")
+        return float(default)
+def parse_int_arg(kwargs, key, default):
+    value = kwargs.get(key, default)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        log.warning(f"Invalid equalizer arg '{key}={value}', using default {default}.")
+        return int(default)
+
+def normalize_input_mode(value):
+    mode = str(value or "playback").strip().lower()
+    if mode in ("playback", "monitor", "output"):
+        return "playback"
+    if mode in ("microphone", "mic", "input", "capture"):
+        return "microphone"
+    log.warning(f"Invalid equalizer input mode '{value}', defaulting to 'playback'.")
+    return "playback"
+
 def run_equalizer(_, grid, foreground_value, idx, **kwargs):
     external_filter = kwargs.get('external-filter', False)
     side = kwargs.get('side', None)
+    input_mode = normalize_input_mode(kwargs.get('input-mode', 'playback'))
+    input_device = kwargs.get('input-device', None)
+    default_level_gain = 0.75 if input_mode == 'microphone' else 1.35
+    default_noise_gate_level = 18 if input_mode == 'microphone' else 1
+    default_silence_sum_threshold = 48 if input_mode == 'microphone' else 2
+    level_gain = parse_float_arg(kwargs, 'level-gain', default_level_gain)
+    noise_gate_level = parse_int_arg(kwargs, 'noise-gate-level', default_noise_gate_level)
+    silence_level_sum_threshold = parse_int_arg(kwargs, 'silence-level-sum-threshold', default_silence_sum_threshold)
+    zero_frame_delay_sec = parse_float_arg(kwargs, 'zero-frame-delay-sec', 4.0)
+    silent_pulse_after_sec = parse_float_arg(kwargs, 'silent-pulse-after-sec', 12.0)
+    silent_pulse_period_sec = parse_float_arg(kwargs, 'silent-pulse-period-sec', 3.8)
+    silent_pulse_reveal_sec = parse_float_arg(kwargs, 'silent-pulse-reveal-sec', 5.0)
     if side not in ('left', 'right'):
         log.error(f"Unexpected equalizer side arg '{side}'. Expected 'left' or 'right'.")
         return
@@ -57,7 +93,20 @@ def run_equalizer(_, grid, foreground_value, idx, **kwargs):
 
     def _run():
         try:
-            ok = eq.run(channel=channel, external_filter=external_filter, device_name=device[1])
+            ok = eq.run(
+                channel=channel,
+                external_filter=external_filter,
+                device_name=device[1],
+                input_mode=input_mode,
+                input_device=input_device,
+                level_gain=level_gain,
+                noise_gate_level=noise_gate_level,
+                silence_level_sum_threshold=silence_level_sum_threshold,
+                zero_frame_notify_delay_sec=zero_frame_delay_sec,
+                silent_pulse_after_sec=silent_pulse_after_sec,
+                silent_pulse_period_sec=silent_pulse_period_sec,
+                silent_pulse_reveal_sec=silent_pulse_reveal_sec,
+            )
             if ok is False:
                 equalizer_retry_after[side] = time.time() + EQUALIZER_RETRY_BACKOFF_SEC
         except Exception as e:

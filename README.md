@@ -351,9 +351,45 @@ Configure the following arguments in the config file (`app -> args`)
 - Use the internal python 9-band filter or use an extenal filter. [EasyEffects](https://github.com/wwmm/easyeffects) is the recommended external filter to use. You can tune the equalizer dynamically as it runs, using the EasyEffects GUI.
 
   `external-filter: false|true`
-- Identify device location by device or quandrant. Used for identifying the app instance if a dispose function is called
+- Select the equalizer input source mode.
+  - `playback` (default): follows the current sink monitor.
+  - `microphone`: captures microphone input (recommended to dedicate a panel/quadrant for this mode).
 
-  `side: left|right|<quadrant>`
+  `input-mode: playback|microphone`
+- Optional input device override used primarily with `input-mode: microphone` (matches an input device name).
+
+  `input-device: <device-name-or-index>`
+- Per-band gain multiplier applied after band energy detection.
+  - Default `1.35` for `playback` (improves low-volume responsiveness).
+  - Default `0.75` for `microphone` (reduces ambient mic sensitivity).
+
+  `level-gain: <float>`
+- Per-band minimum level threshold after gain. Bands below this value are forced to zero.
+  - Default `1` for `playback`.
+  - Default `18` for `microphone` (reduces ambient mic noise spikes).
+
+  `noise-gate-level: <int>`
+- Total level sum threshold used to treat frames as silent (for pulse idle transitions).
+  - Default `2` for `playback`.
+  - Default `48` for `microphone`.
+
+  `silence-level-sum-threshold: <int>`
+- Identify which physical panel side this equalizer instance controls. Used for instance identity/dispose handling.
+  Run playback and microphone equalizers as separate app instances and assign each to its own panel/quadrant time slice.
+
+  `side: left|right`
+- Delay (seconds) before entering pulse-only silent visuals when levels drop to zero.
+
+  `zero-frame-delay-sec: <seconds>`
+- Pulse start delay (legacy alias retained for compatibility). The lower of this and `zero-frame-delay-sec` is used.
+
+  `silent-pulse-after-sec: <seconds>`
+- Pulse period for long-silence mode (center-origin star-like ripple pulse).
+
+  `silent-pulse-period-sec: <seconds>`
+- Time for gradually revealing the inverted `EQ0` mask during long silence while pulsing.
+
+  `silent-pulse-reveal-sec: <seconds>`
 
 The equalizer relies on PulseAudio and Pipewire packages to receive and process the audio output of your computer. The following packages must be installed:
 - Debian/Ubuntu: `sudo apt install pipewire pipewire-pulse wireplumber pulseaudio-utils`
