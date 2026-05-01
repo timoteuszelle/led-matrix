@@ -150,6 +150,8 @@ systemctl status led-matrix-monitoring
 journalctl -u led-matrix-monitoring -f
 ```
 
+For a full module option reference (including `configurationMode`, config-source compatibility, runtime/service options, and layout app fields), see `README-NIXOS.md`.
+
 **Alternative: Systemd Service (Advanced)**
 
 For automated continuous execution, you can run as a systemd service instead:
@@ -272,8 +274,16 @@ Configure the following arguments in the config file (`app->args`)
 `fmt_24_hour: true|false`
 
 ### Weather (provided by `time_weather_plugin.py`):
-You must specify app arguments in the config file and set one or more environment variables, as described below.
+Specify app arguments in the config file as described below.
 Set arguments (`app -> ags`) for the `weather` app in the desired quadrant
+  - Weather provider behavior:
+    - Primary provider: OpenWeather (used when `OPENWEATHER_API_KEY` is set)
+    - Automatic fallback provider: Open-Meteo (no API key required)
+
+  - Environment variables:
+    - `OPENWEATHER_API_KEY` (optional): enables OpenWeather as primary provider.
+    - `IP_LOCATE_API_KEY` (optional): enables IPLocate-based IP geolocation when you do not set `lat_lon` or `zip_info`.
+      If this is not set, the app will fall back to keyless IP geolocation providers.
   - To enable online lookup of local weather information, the app must know your location. Choose one or more of the options.
 
     1) Specify country-specific zip and [ISO 3166 digraph code](https://www.iban.com/country-codes)
@@ -289,6 +299,8 @@ Set arguments (`app -> ags`) for the `weather` app in the desired quadrant
   - Display temperature in Celsius, Farenheit, or Kelinv. Default is metric
 
     `units: imperial|metric|standard`
+  - If weather is configured with `scope: panel`, it owns the full panel while active and the sibling quadrant on that side is suppressed by the scheduler.
+    For predictable rotation, configure one panel-scope app per side and set the sibling app to `display: false`.
   - Show current or forecast weather. Default is current
 
     `forecast: true|false`
@@ -325,6 +337,8 @@ Configure the following arguments in the config file (`app -> args`)
   `panel: left|right|<xxx>`
 
 ### Equalizer (provided by `equalizer_plugin.py`)
+The equalizer is effectively panel-wide per side (`left` or `right`) because it writes directly to the LED device for that side.
+If configured as `scope: panel`, the scheduler enforces panel ownership and suppresses the sibling quadrant while it is active.
 Set the following app settings. These are direct properties of the equalizer app, not args
 - Set to true if the app will handle drawing to the grid the entire time it is active. If false, the app draws a static snapshot on every invocation. Default is false
 

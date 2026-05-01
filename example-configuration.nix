@@ -32,6 +32,11 @@
       };
     };
 
+    # Panel-scope note:
+    # If an app is configured with scope = "panel", it owns the full panel for that side
+    # and the sibling quadrant is suppressed while active.
+    # If both top and bottom apps on a side are scope = "panel", top takes precedence.
+
     # Legacy shorthand still works for compatibility:
     # topLeft = "cpu";
     # bottomLeft = "mem-bat";

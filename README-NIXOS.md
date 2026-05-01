@@ -91,6 +91,53 @@ Also supported:
 - `configFile` (path to YAML file)
 - Legacy shorthand: `topLeft`, `bottomLeft`, `topRight`, `bottomRight` (+ `legacyDuration`)
 
+## Module option reference
+
+Top-level options under `services.led-matrix-monitoring`:
+- `enable`
+  - Enables the systemd service and installs the package to `environment.systemPackages`.
+- `configurationMode`
+  - `linuxOS`: service runs without Nix-managed config injection and uses the app's Linux config lookup behavior.
+  - `nix-flake` / `nix-module`: require one Nix-managed config source (`layout`, `settings`, `config`, `configFile`, or full legacy quadrant shorthand).
+- `package`
+  - Package that provides `led-matrix-monitor`.
+- `layout`
+  - Recommended typed schema for quadrant/app configuration.
+- `settings` / `config`
+  - Raw YAML-like attrset (`config` is deprecated alias of `settings`).
+- `configFile`
+  - Existing YAML file path passed through `--config-file`.
+- Legacy shorthand options
+  - `topLeft`, `bottomLeft`, `topRight`, `bottomRight`, `legacyDuration`.
+- Runtime/service options
+  - `disableKeyListener`, `disablePlugins`, `user`, `group`, `environment`, `extraArguments`.
+
+`layout` app item options:
+- `name` (required)
+- `duration` (optional; falls back to layout duration)
+- `animate` (default `false`)
+- `scope` (optional; supports `panel` behavior)
+- `persistentDraw` (default `false`)
+- `disposeFn` (optional)
+- `display` (default `true`)
+- `args` (attrset of app-specific arguments)
+
+Validation rules enforced by module assertions:
+- `settings` and `config` cannot both be set.
+- `layout` is mutually exclusive with `settings`, `config`, `configFile`, and legacy shorthand.
+- `configFile` is mutually exclusive with `layout`, `settings`, `config`, and legacy shorthand.
+- Legacy shorthand requires all four quadrants to be set.
+- In `layout`, each quadrant list must contain at least one app.
+- In `linuxOS` mode, managed config sources are rejected.
+- In `nix-flake`/`nix-module` mode, one managed config source is required.
+
+## Panel-scope scheduling behavior
+
+- If an active app has `scope = "panel"`, it owns the full panel for that side while active.
+- The sibling quadrant on that side is suppressed for both rendering and app rotation during that active slice.
+- If both active top and bottom apps on the same panel request `scope = "panel"`, top quadrant app wins and a warning is logged.
+- For predictable behavior, configure one panel-scope app per side and set the sibling app to `display = false`.
+
 ## Notes for future development
 
 The new schema aligns with long-term roadmap goals:

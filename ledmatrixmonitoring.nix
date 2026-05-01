@@ -30,7 +30,11 @@ let
       scope = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Optional app scope (for example `panel`).";
+        description = ''
+          Optional app scope (for example `panel`).
+          When set to `panel`, the active app owns the full panel and the sibling quadrant on that side is suppressed by the scheduler while it is active.
+          If both top and bottom apps on a panel simultaneously request `scope = "panel"`, top quadrant takes precedence and a warning is logged.
+        '';
       };
 
       persistentDraw = mkOption {
