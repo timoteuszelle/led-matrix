@@ -466,22 +466,25 @@ def app(args, base_apps, plugin_apps):
                 suppressed_quadrants_pre_rotation.add('bottom-right')
             elif right_owner_quadrant == 'bottom-right':
                 suppressed_quadrants_pre_rotation.add('top-right')
+            now = time.monotonic()
             for quadrant, apps in quads.items():
-                    if quadrant in suppressed_quadrants_pre_rotation:
-                            continue
                     app = apps[app_idx[quadrant]]
-                    if ((time.monotonic() - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']]) \
-                        or (next_key_combo_active))) and not freeze_app_switching:
-                            evdev_next_key_pressed = False
-                            if 'left' in quadrant:
-                                idx_changed[left_drawing_queue] = True
-                            elif len(drawing_queues) > 1:
-                                idx_changed[right_drawing_queue] = True
-                            if 'dispose-fn' in app:
-                                    apps_to_dispose.append(app)
+                    suppressed_for_rotation = quadrant in suppressed_quadrants_pre_rotation
+                    can_force_next = next_key_combo_active and not suppressed_for_rotation
+                    should_advance = (now - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']])) or can_force_next
+                    if should_advance and not freeze_app_switching:
+                            if can_force_next:
+                                evdev_next_key_pressed = False
+                            if not suppressed_for_rotation:
+                                if 'left' in quadrant:
+                                    idx_changed[left_drawing_queue] = True
+                                elif len(drawing_queues) > 1:
+                                    idx_changed[right_drawing_queue] = True
+                                if 'dispose-fn' in app:
+                                        apps_to_dispose.append(app)
                             app_idx[quadrant] = (app_idx[quadrant] + 1) % len(quads[quadrant])
                             app = apps[app_idx[quadrant]]
-                            base_time_map[quadrant][app['name']] = time.monotonic()
+                            base_time_map[quadrant][app['name']] = now
             left_top_app = top_left[app_idx['top-left']]
             left_bottom_app = bottom_left[app_idx['bottom-left']]
             right_top_app = top_right[app_idx['top-right']]
