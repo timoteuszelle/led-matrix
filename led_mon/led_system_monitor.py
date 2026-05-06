@@ -466,15 +466,19 @@ def app(args, base_apps, plugin_apps):
                 suppressed_quadrants_pre_rotation.add('bottom-right')
             elif right_owner_quadrant == 'bottom-right':
                 suppressed_quadrants_pre_rotation.add('top-right')
+            # Keep quadrant schedules aligned even when one quadrant is suppressed by
+            # a sibling panel-scope app; otherwise manual Alt+N can create lasting skew.
             now = time.monotonic()
             for quadrant, apps in quads.items():
                     app = apps[app_idx[quadrant]]
                     suppressed_for_rotation = quadrant in suppressed_quadrants_pre_rotation
-                    can_force_next = next_key_combo_active and not suppressed_for_rotation
+                    can_force_next = next_key_combo_active
                     should_advance = (now - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']])) or can_force_next
                     if should_advance and not freeze_app_switching:
                             if can_force_next:
                                 evdev_next_key_pressed = False
+                            # Suppressed quadrants still rotate state, but should not
+                            # trigger draw-side animation/dispose transitions.
                             if not suppressed_for_rotation:
                                 if 'left' in quadrant:
                                     idx_changed[left_drawing_queue] = True
