@@ -1,9 +1,9 @@
 # Version Information
 
 ## Current Version
-- **Version**: 2.1.1
-- **Branch**: main
-- **Date**: 2026-02-20
+- **Version**: 2.1.2
+- **Branch**: pr/nixos-module-equalizer-hardening
+- **Date**: 2026-05-01
 
 ## Usage with specific commit
 
@@ -17,7 +17,16 @@ led-matrix-monitoring = {
 ```
 
 ## Changelog
-gn
+### v2.1.2 (2026-05-01)
+- **Equalizer stabilization and tuning**
+  - Removed intermediate EQ0 silence behavior in favor of pulse-only idle flow
+  - Improved playback/microphone mode defaults and noise-gate handling
+  - Reduced animation jitter and improved transition continuity under low/no input
+- **Runtime robustness**
+  - Fixed pulse rendering failure that could freeze silent-state updates
+  - Reduced cross-panel timing interference during persistent draw updates
+- **Nix module/config alignment**
+  - Kept Nix-native quadrant layout path documented and validated for runtime generation
 ### v2.1.1 (2026-03-01)
 - **Weather widget enhancements**
   - Support multiple weather measures (temp/condition, wind chill, wind speed/direction)

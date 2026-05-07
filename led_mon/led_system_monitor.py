@@ -89,20 +89,19 @@ def evcode_keyloop():
         try:
             device = evdev.InputDevice(kbd_path)
             for event in device.read_loop():
-                for event in device.read_loop():
-                    if event.type == ecodes.EV_KEY:
-                        if event.value == 1:
-                            keys_pressed.add(event.code)
-                        elif event.value == 0:
-                            keys_pressed.discard(event.code)
+                if event.type == ecodes.EV_KEY:
+                    if event.value == 1:
+                        keys_pressed.add(event.code)
+                    elif event.value == 0:
+                        keys_pressed.discard(event.code)
 
-                        if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_F in keys_pressed:
-                            freeze_app_switching = True
-                        elif (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_U in keys_pressed:
-                            freeze_app_switching = False
-                            
-                        if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_N in keys_pressed:
-                            evdev_next_key_pressed = True
+                    if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_F in keys_pressed:
+                        freeze_app_switching = True
+                    elif (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_U in keys_pressed:
+                        freeze_app_switching = False
+
+                    if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_N in keys_pressed:
+                        evdev_next_key_pressed = True
         except (PermissionError, FileNotFoundError, OSError) as e:
             log.warning(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
                 
@@ -276,6 +275,63 @@ def app(args, base_apps, plugin_apps):
         "snap": draw_snap,
         "none": lambda *x: x # noop
     }
+
+    panel_scope_conflicts_logged = set()
+    suppressed_panel_apps = {
+        'top-left': None,
+        'bottom-left': None,
+        'top-right': None,
+        'bottom-right': None,
+    }
+
+    def build_app_kwargs(app):
+        if 'args' in app:
+            # Args must be hashable, to support function caching, so convert list values to tuples
+            return {k: tuple(v) if isinstance(v, list) else v for k, v in app['args'].items()}
+        return {}
+
+    def get_panel_scope_owner(panel_name, top_quadrant_name, top_app, bottom_quadrant_name, bottom_app):
+        top_claims_panel = top_app.get("display", True) and top_app.get("scope", None) == "panel"
+        bottom_claims_panel = bottom_app.get("display", True) and bottom_app.get("scope", None) == "panel"
+
+        if top_claims_panel and bottom_claims_panel:
+            conflict_key = (panel_name, top_app.get("name"), bottom_app.get("name"))
+            if conflict_key not in panel_scope_conflicts_logged:
+                panel_scope_conflicts_logged.add(conflict_key)
+                log.warning(
+                    f"Both {top_quadrant_name} ({top_app.get('name')}) and {bottom_quadrant_name} ({bottom_app.get('name')}) "
+                    f"claim scope='panel' on {panel_name} panel; preferring {top_quadrant_name}."
+                )
+            return top_quadrant_name, top_app
+        if top_claims_panel:
+            return top_quadrant_name, top_app
+        if bottom_claims_panel:
+            return bottom_quadrant_name, bottom_app
+        return None, None
+
+    def maybe_dispose_suppressed_panel_app(quadrant_name):
+        if quadrant_name is None:
+            return
+        app = quads[quadrant_name][app_idx[quadrant_name]]
+        dispose_fn = app.get('dispose-fn', None)
+        if dispose_fn is None:
+            return
+
+        signature = (app.get('name'), app_idx[quadrant_name], dispose_fn)
+        if suppressed_panel_apps.get(quadrant_name) == signature:
+            return
+
+        func = app_functions.get(dispose_fn)
+        if func is None:
+            log.error(f"Unrecognized dispose function '{dispose_fn}' for suppressed app '{app.get('name')}' in {quadrant_name}")
+            suppressed_panel_apps[quadrant_name] = signature
+            return
+
+        try:
+            func(**build_app_kwargs(app))
+            suppressed_panel_apps[quadrant_name] = signature
+        except Exception as e:
+            log.error(f"Error disposing suppressed app {app.get('name')} in {quadrant_name}: {e}")
     
     def on_press(key):
         global alt_pressed, i_pressed, n_pressed, freeze_app_switching
@@ -376,44 +432,108 @@ def app(args, base_apps, plugin_apps):
             # Track when an app is changed in either panel, used to manage animation state
             idx_changed = {
                 left_drawing_queue: False,
-                right_drawing_queue: False
             }
+            if len(drawing_queues) > 1:
+                idx_changed[right_drawing_queue] = False
             # A set of apps to be (potentially) disposed
             apps_to_dispose = []
+
+            active_apps = {
+                'top-left': top_left[app_idx['top-left']],
+                'bottom-left': bottom_left[app_idx['bottom-left']],
+                'top-right': top_right[app_idx['top-right']],
+                'bottom-right': bottom_right[app_idx['bottom-right']],
+            }
+
+            left_owner_quadrant, _ = get_panel_scope_owner(
+                "left",
+                'top-left', active_apps['top-left'],
+                'bottom-left', active_apps['bottom-left']
+            )
+            right_owner_quadrant, _ = get_panel_scope_owner(
+                "right",
+                'top-right', active_apps['top-right'],
+                'bottom-right', active_apps['bottom-right']
+            )
+
+            suppressed_quadrants_pre_rotation = set()
+            if left_owner_quadrant == 'top-left':
+                suppressed_quadrants_pre_rotation.add('bottom-left')
+            elif left_owner_quadrant == 'bottom-left':
+                suppressed_quadrants_pre_rotation.add('top-left')
+            if right_owner_quadrant == 'top-right':
+                suppressed_quadrants_pre_rotation.add('bottom-right')
+            elif right_owner_quadrant == 'bottom-right':
+                suppressed_quadrants_pre_rotation.add('top-right')
+            # Keep quadrant schedules aligned even when one quadrant is suppressed by
+            # a sibling panel-scope app; otherwise manual Alt+N can create lasting skew.
+            now = time.monotonic()
             for quadrant, apps in quads.items():
                     app = apps[app_idx[quadrant]]
-                    if ((time.monotonic() - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']]) \
-                        or (next_key_combo_active))) and not freeze_app_switching:
-                            evdev_next_key_pressed = False
-                            if 'left' in quadrant:
-                                idx_changed[left_drawing_queue] = True
-                            else:
-                                idx_changed[right_drawing_queue] = True
-                            if 'dispose-fn' in app:
-                                    apps_to_dispose.append(app)
+                    suppressed_for_rotation = quadrant in suppressed_quadrants_pre_rotation
+                    can_force_next = next_key_combo_active
+                    should_advance = (now - base_time_map[quadrant][app['name']] >= int(app_duration[app['name']])) or can_force_next
+                    if should_advance and not freeze_app_switching:
+                            if can_force_next:
+                                evdev_next_key_pressed = False
+                            # Suppressed quadrants still rotate state, but should not
+                            # trigger draw-side animation/dispose transitions.
+                            if not suppressed_for_rotation:
+                                if 'left' in quadrant:
+                                    idx_changed[left_drawing_queue] = True
+                                elif len(drawing_queues) > 1:
+                                    idx_changed[right_drawing_queue] = True
+                                if 'dispose-fn' in app:
+                                        apps_to_dispose.append(app)
                             app_idx[quadrant] = (app_idx[quadrant] + 1) % len(quads[quadrant])
                             app = apps[app_idx[quadrant]]
-                            base_time_map[quadrant][app['name']] = time.monotonic()
-            left_args = [
-                top_left[app_idx['top-left']],
-                bottom_left[app_idx['bottom-left']],
-            ]
+                            base_time_map[quadrant][app['name']] = now
+            left_top_app = top_left[app_idx['top-left']]
+            left_bottom_app = bottom_left[app_idx['bottom-left']]
+            right_top_app = top_right[app_idx['top-right']]
+            right_bottom_app = bottom_right[app_idx['bottom-right']]
 
-            right_args = [
-                top_right[app_idx['top-right']],
-                bottom_right[app_idx['bottom-right']]
-            ]
+            left_owner_quadrant, left_owner_app = get_panel_scope_owner(
+                "left",
+                'top-left', left_top_app,
+                'bottom-left', left_bottom_app
+            )
+            right_owner_quadrant, right_owner_app = get_panel_scope_owner(
+                "right",
+                'top-right', right_top_app,
+                'bottom-right', right_bottom_app
+            )
+
+            left_args = [left_owner_app] if left_owner_app else [left_top_app, left_bottom_app]
+            right_args = [right_owner_app] if right_owner_app else [right_top_app, right_bottom_app]
+
+            left_suppressed_quadrant = None
+            if left_owner_quadrant == 'top-left':
+                left_suppressed_quadrant = 'bottom-left'
+            elif left_owner_quadrant == 'bottom-left':
+                left_suppressed_quadrant = 'top-left'
+
+            right_suppressed_quadrant = None
+            if right_owner_quadrant == 'top-right':
+                right_suppressed_quadrant = 'bottom-right'
+            elif right_owner_quadrant == 'bottom-right':
+                right_suppressed_quadrant = 'top-right'
+
+            currently_suppressed_quadrants = set(filter(None, [left_suppressed_quadrant, right_suppressed_quadrant]))
+            for quadrant in suppressed_panel_apps:
+                if quadrant not in currently_suppressed_quadrants:
+                    suppressed_panel_apps[quadrant] = None
 
             # Capture animating state so we can restart it if necessary after stopping it for ID display
-            animating_left = left_args[0].get("animate", False) or left_args[1].get("animate", False)
-            animating_right = right_args[0].get("animate", False) or right_args[1].get("animate", False)
+            animating_left = any(arg.get("animate", False) for arg in left_args)
+            animating_right = any(arg.get("animate", False) for arg in right_args)
             
             if id_key_combo_active:
                 # Show app IDs for each quadrant or panel
                 draw_outline_border(grid, background_value)
-                #If app takes up entire panel, we draw the ID differently
-                if left_args[0].get("scope", None) == "panel":
-                    draw_id(grid, left_args[0]['name'], foreground_value, args=left_args[0].get('args', None))
+                # If app takes up entire panel, draw the panel app ID only
+                if left_owner_app:
+                    draw_id(grid, left_owner_app['name'], foreground_value, args=left_owner_app.get('args', None))
                 else:
                     draw_ids(grid, left_args[0]['name'], left_args[1]['name'], foreground_value,
                         targs=left_args[0].get('args', None), bargs=left_args[1].get('args', None))
@@ -422,11 +542,11 @@ def app(args, base_apps, plugin_apps):
                 if len(drawing_queues) > 1:  # Right panel exists
                     grid = np.zeros((9,34), dtype = int)
                     draw_outline_border(grid, background_value)
-                    if right_args[0].get("scope", None) == "panel":
-                        draw_id(grid, right_args[0]['name'], foreground_value, args=right_args[0].get('args', None))
+                    if right_owner_app:
+                        draw_id(grid, right_owner_app['name'], foreground_value, args=right_owner_app.get('args', None))
                     else:
                         draw_ids(grid, right_args[0]['name'], right_args[1]['name'], foreground_value,
-                            targs=right_args[0].get('args', None), bargs=right_args[0].get('args', None))
+                            targs=right_args[0].get('args', None), bargs=right_args[1].get('args', None))
                     right_drawing_queue.put((grid, False))
                 time.sleep(0.1)
                 latch_key_combo = True
@@ -437,9 +557,13 @@ def app(args, base_apps, plugin_apps):
                 if i == 0:
                     panel = 'left'
                     _args = left_args
+                    suppressed_quadrant = left_suppressed_quadrant
                 else:
                     panel = 'right'
                     _args = right_args
+                    suppressed_quadrant = right_suppressed_quadrant
+
+                maybe_dispose_suppressed_panel_app(suppressed_quadrant)
                 # For persistent-draw apps, we don't submit the grid to the drawing queue
                 persistent_draw = False
                 for j, arg in enumerate(_args):
@@ -456,10 +580,7 @@ def app(args, base_apps, plugin_apps):
                     try:
                         func = app_functions[arg_name]
                         func_args = [arg_name, grid, foreground_value, idx]
-                        kwargs = {}
-                        if 'args' in arg:
-                            #Args must be hashable, to support function caching, so convert any list values in dicts to tuples
-                            kwargs = {k: tuple(v) if isinstance(v, list) else v for k, v in arg['args'].items()}
+                        kwargs = build_app_kwargs(arg)
                         func(*func_args, **kwargs)
                         animate = arg.get("animate", False)
                     except KeyError:
@@ -468,7 +589,7 @@ def app(args, base_apps, plugin_apps):
                         log.error(f"Error {e} with app {arg_name} for {loc} {panel}")
                     # Single border draw for mem and bat together
                     if arg_name == 'mem-bat': arg_name = 'mem'
-                    if kwargs.get('border', True):
+                    if kwargs.get('border', True) and arg.get("scope", None) != "panel":
                         draw_app_border(arg_name, grid, background_value, idx)
                 do_animate = None
                 if idx_changed[draw_queue]:
@@ -486,9 +607,7 @@ def app(args, base_apps, plugin_apps):
                 dispose_fn = app.get('dispose-fn', None)
                 if dispose_fn:
                     func = app_functions[dispose_fn]
-                    kwargs = {}
-                    if 'args' in app:
-                        kwargs = {k: tuple(v) if isinstance(v, list) else v for k, v in app['args'].items()}
+                    kwargs = build_app_kwargs(app)
                     func(**kwargs)
             del apps_to_dispose
             time.sleep(0.1)     

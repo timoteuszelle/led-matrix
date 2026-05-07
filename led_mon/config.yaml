@@ -22,7 +22,21 @@ quadrants:
     persistent-draw: true
     args:
       external-filter: false
-      # left|right|<name of quadrant>
+      # playback|microphone
+      input-mode: playback
+      # Optional input device override for microphone mode (substring match)
+      # input-device: "Microphone"
+      # Level shaping (defaults: playback gain=1.35 gate=1 sum-threshold=2,
+      # microphone gain=0.75 gate=18 sum-threshold=48)
+      # level-gain: 1.35
+      # noise-gate-level: 1
+      # silence-level-sum-threshold: 2
+      # Silence behavior tuning (continuous center-origin star pulse)
+      # zero-frame-delay-sec: 4  # pulse-only silence display delay
+      # silent-pulse-after-sec: 12
+      # silent-pulse-period-sec: 3.8
+      # silent-pulse-reveal-sec: 5
+      # left|right
       side: left
       border: false  
   - app:
@@ -64,6 +78,11 @@ quadrants:
     persistent-draw: true
     args:
       external-filter: false
+      # Optional overrides:
+      # input-mode: microphone
+      # level-gain: 0.75
+      # noise-gate-level: 18
+      # silence-level-sum-threshold: 48
       side: right
       border: false
   - app:

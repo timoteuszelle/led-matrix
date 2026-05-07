@@ -88,7 +88,7 @@ python -m led_mon.led_system_monitor
 ### For NixOS users:
 ```bash
 # Using the Nix flake (recommended)
-nix run github:MidnightJava/led-matrix
+nix run github:timoteuszelle/led-matrix/main
 
 # Or build locally
 nix build
@@ -96,78 +96,61 @@ nix build
 ```
 
 ### NixOS System Integration
+For NixOS users who want to run LED matrix monitoring as a system service, use the standalone module from this repository.
 
-For NixOS users who want to run LED matrix monitoring as a system service, additional configuration is required:
-
-**1. Add to your flake.nix inputs:**
+**1. Add flake input:**
 ```nix
 {
   inputs = {
     # ... other inputs
-    led-matrix-monitoring.url = "github:MidnightJava/led-matrix";
+    led-matrix-monitoring.url = "github:timoteuszelle/led-matrix/main";
   };
 }
 ```
 
-**2. Import the module in your NixOS configuration:**
+**2. Import module:**
 ```nix
 {
   imports = [
     inputs.led-matrix-monitoring.nixosModules.led-matrix-monitoring
+    # or: inputs.led-matrix-monitoring.nixosModules.ledmatrixmonitoring
   ];
 }
 ```
 
-**3. Enable and configure the service:**
+**3. Configure service (recommended Nix-native schema):**
 ```nix
 services.led-matrix-monitoring = {
   enable = true;
-  topLeft = "cpu";
-  bottomLeft = "mem-bat";
-  topRight = "disk";
-  bottomRight = "net";
-  disableKeyListener = true;  # Recommended for system service
-  user = "your-username";
+  configurationMode = "nix-module"; # linuxOS | nix-flake | nix-module
+
+  layout = {
+    duration = 10;
+    quadrants = {
+      topLeft = [{ name = "cpu"; }];
+      bottomLeft = [{ name = "mem-bat"; }];
+      topRight = [{ name = "disk"; }];
+      bottomRight = [{ name = "net"; }];
+    };
+  };
+
+  # Optional for graphical sessions:
+  # environment.DISPLAY = ":0";
 };
 ```
 
-**4. Add systemd service environment override (Required):**
-
-The service needs access to the display server. Add this to your NixOS configuration:
-
-```nix
-# Override the LED matrix monitoring service to add DISPLAY environment variable
-systemd.services.led-matrix-monitoring = {
-  environment = {
-    DISPLAY = ":0";  # Adjust if using different display
-  };
-  serviceConfig = {
-    # Ensure the service waits for the graphical session
-    After = [ "graphical-session.target" ];
-    Wants = [ "graphical-session.target" ];
-  };
-};
-```
-
-**5. Rebuild your system:**
+**4. Rebuild your system:**
 ```bash
 sudo nixos-rebuild switch
 ```
 
 **Troubleshooting NixOS Service Issues:**
-
-If the service fails to start with display connection errors:
-
 ```bash
-# Check service status
-systemctl --user status led-matrix-monitoring
-
-# View logs
-journalctl --user -u led-matrix-monitoring -f
-
-# Common error: "failed to acquire X connection: Bad display name"
-# Solution: Ensure DISPLAY environment variable is set in service override
+systemctl status led-matrix-monitoring
+journalctl -u led-matrix-monitoring -f
 ```
+
+For a full module option reference (including `configurationMode`, config-source compatibility, runtime/service options, and layout app fields), see `README-NIXOS.md`.
 
 **Alternative: Systemd Service (Advanced)**
 
@@ -291,8 +274,16 @@ Configure the following arguments in the config file (`app->args`)
 `fmt_24_hour: true|false`
 
 ### Weather (provided by `time_weather_plugin.py`):
-You must specify app arguments in the config file and set one or more environment variables, as described below.
+Specify app arguments in the config file as described below.
 Set arguments (`app -> ags`) for the `weather` app in the desired quadrant
+  - Weather provider behavior:
+    - Primary provider: OpenWeather (used when `OPENWEATHER_API_KEY` is set)
+    - Automatic fallback provider: Open-Meteo (no API key required)
+
+  - Environment variables:
+    - `OPENWEATHER_API_KEY` (optional): enables OpenWeather as primary provider.
+    - `IP_LOCATE_API_KEY` (optional): enables IPLocate-based IP geolocation when you do not set `lat_lon` or `zip_info`.
+      If this is not set, the app will fall back to keyless IP geolocation providers.
   - To enable online lookup of local weather information, the app must know your location. Choose one or more of the options.
 
     1) Specify country-specific zip and [ISO 3166 digraph code](https://www.iban.com/country-codes)
@@ -308,6 +299,8 @@ Set arguments (`app -> ags`) for the `weather` app in the desired quadrant
   - Display temperature in Celsius, Farenheit, or Kelinv. Default is metric
 
     `units: imperial|metric|standard`
+  - If weather is configured with `scope: panel`, it owns the full panel while active and the sibling quadrant on that side is suppressed by the scheduler.
+    For predictable rotation, configure one panel-scope app per side and set the sibling app to `display: false`.
   - Show current or forecast weather. Default is current
 
     `forecast: true|false`
@@ -344,6 +337,8 @@ Configure the following arguments in the config file (`app -> args`)
   `panel: left|right|<xxx>`
 
 ### Equalizer (provided by `equalizer_plugin.py`)
+The equalizer is effectively panel-wide per side (`left` or `right`) because it writes directly to the LED device for that side.
+If configured as `scope: panel`, the scheduler enforces panel ownership and suppresses the sibling quadrant while it is active.
 Set the following app settings. These are direct properties of the equalizer app, not args
 - Set to true if the app will handle drawing to the grid the entire time it is active. If false, the app draws a static snapshot on every invocation. Default is false
 
@@ -356,9 +351,45 @@ Configure the following arguments in the config file (`app -> args`)
 - Use the internal python 9-band filter or use an extenal filter. [EasyEffects](https://github.com/wwmm/easyeffects) is the recommended external filter to use. You can tune the equalizer dynamically as it runs, using the EasyEffects GUI.
 
   `external-filter: false|true`
-- Identify device location by device or quandrant. Used for identifying the app instance if a dispose function is called
+- Select the equalizer input source mode.
+  - `playback` (default): follows the current sink monitor.
+  - `microphone`: captures microphone input (recommended to dedicate a panel/quadrant for this mode).
 
-  `side: left|right|<quadrant>`
+  `input-mode: playback|microphone`
+- Optional input device override used primarily with `input-mode: microphone` (matches an input device name).
+
+  `input-device: <device-name-or-index>`
+- Per-band gain multiplier applied after band energy detection.
+  - Default `1.35` for `playback` (improves low-volume responsiveness).
+  - Default `0.75` for `microphone` (reduces ambient mic sensitivity).
+
+  `level-gain: <float>`
+- Per-band minimum level threshold after gain. Bands below this value are forced to zero.
+  - Default `1` for `playback`.
+  - Default `18` for `microphone` (reduces ambient mic noise spikes).
+
+  `noise-gate-level: <int>`
+- Total level sum threshold used to treat frames as silent (for pulse idle transitions).
+  - Default `2` for `playback`.
+  - Default `48` for `microphone`.
+
+  `silence-level-sum-threshold: <int>`
+- Identify which physical panel side this equalizer instance controls. Used for instance identity/dispose handling.
+  Run playback and microphone equalizers as separate app instances and assign each to its own panel/quadrant time slice.
+
+  `side: left|right`
+- Delay (seconds) before entering pulse-only silent visuals when levels drop to zero.
+
+  `zero-frame-delay-sec: <seconds>`
+- Pulse start delay (legacy alias retained for compatibility). The lower of this and `zero-frame-delay-sec` is used.
+
+  `silent-pulse-after-sec: <seconds>`
+- Pulse period for long-silence mode (center-origin star-like ripple pulse).
+
+  `silent-pulse-period-sec: <seconds>`
+- Time for gradually revealing the inverted `EQ0` mask during long silence while pulsing.
+
+  `silent-pulse-reveal-sec: <seconds>`
 
 The equalizer relies on PulseAudio and Pipewire packages to receive and process the audio output of your computer. The following packages must be installed:
 - Debian/Ubuntu: `sudo apt install pipewire pipewire-pulse wireplumber pulseaudio-utils`

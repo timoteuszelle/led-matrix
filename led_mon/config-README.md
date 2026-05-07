@@ -10,7 +10,7 @@ Here is an explanation of the parameters that can (or must) be specified for eac
 
 **duration** (optional): The number of seconds the app will be displayed before switching to the next one. If there is only one app in the quadrant, this parameter will have no effect. This paramater is optional only if a global `duration` value is specified.
 
-**scope** (optional): If set to `panel`, the app will be displayed on the entire panel instead of a single quandrant. The other quadrant on the panel should have an app with `display:false` for the same duration, to avoid a conflict. For single-quadrant display, omit this parameter, set it to any other value, or specify no value.
+**scope** (optional): If set to `panel`, the app will be displayed on the entire panel instead of a single quandrant. The scheduler now enforces panel ownership: while a panel-scope app is active in either quadrant, the sibling quadrant on that side is suppressed for rendering and app rotation. If both top and bottom apps on the same side are active and both set `scope: panel`, the top quadrant app takes precedence and a warning is logged. For predictable behavior, configure one panel-scope app per side and set the sibling quadrant app to `display:false`.
 
 **animate** (optional): If set to true, the displayed pattern will scroll vertically.
 

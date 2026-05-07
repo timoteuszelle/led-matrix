@@ -1,237 +1,164 @@
 # Framework 16 LED Matrix Monitoring - NixOS Integration
 
-This repository provides a NixOS package and service for the Framework 16 LED Matrix System Monitor. It includes robustness improvements and easy NixOS integration.
+This repository provides a NixOS package and a standalone NixOS module (`ledmatrixmonitoring.nix`) for the Framework 16 LED Matrix monitor service.
 
-## Features
+## What is new in the module design
 
-- **Complete NixOS Integration**: Flake with module support for easy system integration
-- **Robust Error Handling**: Graceful degradation when hardware is unavailable or permissions are denied
-- **Configurable Service**: Systemd service with full configuration options
-- **Plugin Support**: Extensible plugin framework for additional functionality
-- **Framework Hardware Support**: Specifically designed for Framework 16 LED Matrix panels
+- **Standalone module file**: `ledmatrixmonitoring.nix` (no large inline module block in `flake.nix`)
+- **Nix-native configuration schema**: `services.led-matrix-monitoring.layout` (typed options for quadrants/apps)
+- **Configuration mode switch**: `configurationMode = "linuxOS" | "nix-flake" | "nix-module"`
+- **Backward compatibility**: legacy quadrant shorthand (`topLeft`, `bottomLeft`, etc.) and `settings`/`configFile` remain available
+- **Non-Nix Linux flow unchanged**: scripts like `build_and_install.sh` and `install_service.sh` are untouched
 
-## Quick Start
+## Quick start (flake-based NixOS)
 
-### Method 1: Direct Package Installation
-
-Add this to your NixOS configuration:
-
-```nix
-# configuration.nix or any imported module
-{ config, pkgs, ... }:
-
-let
-  led-matrix-monitoring = pkgs.callPackage (pkgs.fetchFromGitHub {
-    owner = "timoteuszelle";
-    repo = "led-matrix";
-    rev = "fix/robustness-and-permission-handling";  # Use latest commit hash
-    sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";  # Replace with actual hash
-  } + "/default.nix") {};
-in
-{
-  environment.systemPackages = [ led-matrix-monitoring ];
-}
-```
-
-Then run manually:
-```bash
-led-matrix-monitor --help
-led-matrix-monitor --top-left cpu --bottom-left mem-bat --top-right disk --bottom-right net
-```
-
-### Method 2: Using Flakes (Recommended)
-
-#### Step 1: Add as flake input
-
-Add to your `flake.nix`:
+### 1) Add input
 
 ```nix
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # ... your other inputs
     led-matrix-monitoring = {
-      url = "github:timoteuszelle/led-matrix/fix/robustness-and-permission-handling";
+      url = "github:timoteuszelle/led-matrix/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
-
-  outputs = { self, nixpkgs, led-matrix-monitoring, ... }:
-  {
-    nixosConfigurations.your-hostname = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        ./configuration.nix
-        led-matrix-monitoring.nixosModules.led-matrix-monitoring
-      ];
-    };
-  };
 }
 ```
 
-#### Step 2: Configure the service
-
-Add to your `configuration.nix`:
+### 2) Import the module
 
 ```nix
-{ config, lib, pkgs, ... }:
-
 {
-  # Enable the LED Matrix Monitoring service
+  imports = [
+    inputs.led-matrix-monitoring.nixosModules.led-matrix-monitoring
+    # or: inputs.led-matrix-monitoring.nixosModules.ledmatrixmonitoring
+  ];
+}
+```
+
+### 3) Configure the service (recommended style)
+
+```nix
+{
   services.led-matrix-monitoring = {
     enable = true;
-    
-    # Configure what shows in each quadrant
-    topLeft = "cpu";          # CPU utilization
-    bottomLeft = "mem-bat";   # Memory usage + battery status
-    topRight = "disk";        # Disk I/O rates
-    bottomRight = "net";      # Network upload/download
-    
-    # Optional: disable keyboard listener (Alt+I shortcut)
+    configurationMode = "nix-module";
+
+    layout = {
+      duration = 10;
+      quadrants = {
+        topLeft = [{ name = "cpu"; }];
+        bottomLeft = [{ name = "mem-bat"; }];
+        topRight = [{ name = "disk"; }];
+        bottomRight = [{ name = "net"; }];
+      };
+    };
+
+    # Optional examples:
     # disableKeyListener = true;
-    
-    # Optional: disable plugins
     # disablePlugins = true;
-    
-    # Optional: run as different user (default: root)
-    # user = "your-username";
+    # user = "tim";
+    # environment.DISPLAY = ":0";
   };
 }
 ```
 
-#### Step 3: Rebuild your system
+### 4) Rebuild
 
 ```bash
 sudo nixos-rebuild switch --flake .#your-hostname
 ```
 
-## Configuration Options
+## Configuration modes
 
-### Display Metrics
+- `linuxOS`
+  - Service behaves like normal Linux packaging lookup (no Nix-managed config file injected)
+  - Do **not** combine with `layout`, `settings`, `config`, `configFile`, or legacy quadrant shorthand
+- `nix-flake`
+  - Nix-managed config source required (`layout`, `settings`, `configFile`, or legacy shorthand)
+- `nix-module`
+  - Same runtime behavior as `nix-flake`, named for direct module-centric workflows
 
-Each quadrant can display:
-- `cpu`: CPU utilization percentage
-- `mem-bat`: Memory usage and battery charge/status
-- `disk`: Disk read/write I/O rates
-- `net`: Network upload/download rates
-- `temp`: Temperature sensor readings (plugin)
-- `fan`: Fan speed readings (plugin)
-- `none`: Disabled/blank
+## Configuration sources (priority and compatibility)
 
-### Service Options
+Recommended:
+- `layout` (typed, future-friendly Nix schema)
 
-```nix
-services.led-matrix-monitoring = {
-  enable = true;                    # Enable the service
-  topLeft = "cpu";                 # Top-left quadrant
-  bottomLeft = "mem-bat";          # Bottom-left quadrant
-  topRight = "disk";               # Top-right quadrant  
-  bottomRight = "net";             # Bottom-right quadrant
-  disableKeyListener = false;      # Disable Alt+I app identification
-  disablePlugins = false;          # Disable plugin system
-  user = "root";                   # User to run service as
-};
-```
+Also supported:
+- `settings` (raw attrset rendered to YAML)
+- `config` (deprecated alias of `settings`)
+- `configFile` (path to YAML file)
+- Legacy shorthand: `topLeft`, `bottomLeft`, `topRight`, `bottomRight` (+ `legacyDuration`)
 
-## Manual Usage
+## Module option reference
 
-Run directly with custom options:
+Top-level options under `services.led-matrix-monitoring`:
+- `enable`
+  - Enables the systemd service and installs the package to `environment.systemPackages`.
+- `configurationMode`
+  - `linuxOS`: service runs without Nix-managed config injection and uses the app's Linux config lookup behavior.
+  - `nix-flake` / `nix-module`: require one Nix-managed config source (`layout`, `settings`, `config`, `configFile`, or full legacy quadrant shorthand).
+- `package`
+  - Package that provides `led-matrix-monitor`.
+- `layout`
+  - Recommended typed schema for quadrant/app configuration.
+- `settings` / `config`
+  - Raw YAML-like attrset (`config` is deprecated alias of `settings`).
+- `configFile`
+  - Existing YAML file path passed through `--config-file`.
+- Legacy shorthand options
+  - `topLeft`, `bottomLeft`, `topRight`, `bottomRight`, `legacyDuration`.
+- Runtime/service options
+  - `disableKeyListener`, `disablePlugins`, `user`, `group`, `environment`, `extraArguments`.
 
-```bash
-# Show help
-led-matrix-monitor --help
+`layout` app item options:
+- `name` (required)
+- `duration` (optional; falls back to layout duration)
+- `animate` (default `false`)
+- `scope` (optional; supports `panel` behavior)
+- `persistentDraw` (default `false`)
+- `disposeFn` (optional)
+- `display` (default `true`)
+- `args` (attrset of app-specific arguments)
 
-# Custom configuration
-led-matrix-monitor \
-  --top-left cpu \
-  --bottom-left mem-bat \
-  --top-right temp \
-  --bottom-right fan \
-  --no-key-listener
-```
+Validation rules enforced by module assertions:
+- `settings` and `config` cannot both be set.
+- `layout` is mutually exclusive with `settings`, `config`, `configFile`, and legacy shorthand.
+- `configFile` is mutually exclusive with `layout`, `settings`, `config`, and legacy shorthand.
+- Legacy shorthand requires all four quadrants to be set.
+- In `layout`, each quadrant list must contain at least one app.
+- In `linuxOS` mode, managed config sources are rejected.
+- In `nix-flake`/`nix-module` mode, one managed config source is required.
 
-## Keyboard Shortcuts
+## Panel-scope scheduling behavior
 
-- **Alt+I**: Display application names in each quadrant while pressed
-- Use `--no-key-listener` or `disableKeyListener = true` to disable
+- If an active app has `scope = "panel"`, it owns the full panel for that side while active.
+- The sibling quadrant on that side is suppressed for both rendering and app rotation during that active slice.
+- If both active top and bottom apps on the same panel request `scope = "panel"`, top quadrant app wins and a warning is logged.
+- For predictable behavior, configure one panel-scope app per side and set the sibling app to `display = false`.
 
-## Permissions
+## Notes for future development
 
-For keyboard functionality:
-- Service runs as `root` by default (recommended)
-- If running as user, they'll be added to `input` group automatically
-- Consider security implications of `input` group membership
+The new schema aligns with long-term roadmap goals:
+- clean mode boundaries
+- easier extension for additional app fields/options
+- stronger validation in module assertions
+- easier API-oriented evolution without forcing users to hand-maintain YAML-shaped config in Nix
 
 ## Troubleshooting
 
-### Check service status
+Check service status:
 ```bash
 systemctl status led-matrix-monitoring
 ```
 
-### View logs
+Follow logs:
 ```bash
 journalctl -u led-matrix-monitoring -f
 ```
 
-### Test without hardware
+Test binary:
 ```bash
-# Should show help even without LED matrices
 led-matrix-monitor --help
 ```
-
-### Common issues
-
-1. **"No LED devices found"**: LED Matrix panels not detected
-   - Check USB connections
-   - Verify Framework 16 with LED Matrix input modules
-
-2. **Permission errors**: Input device access denied
-   - Service automatically handles this when running as root
-   - For user mode, automatic `input` group membership is configured
-
-3. **Module import errors**: Missing dependencies
-   - All dependencies are automatically handled by Nix
-   - Try rebuilding: `nix build github:timoteuszelle/led-matrix/fix/robustness-and-permission-handling`
-
-## Development
-
-### Local development
-
-```bash
-git clone https://github.com/timoteuszelle/led-matrix.git
-cd led-matrix
-nix develop  # Enter development shell with all dependencies
-python led_system_monitor.py --help
-```
-
-### Building locally
-
-```bash
-nix build github:timoteuszelle/led-matrix/fix/robustness-and-permission-handling
-./result/bin/led-matrix-monitor --help
-```
-
-## Contributing
-
-This is a fork of the original [FW_LED_System_Monitor](https://code.karsttech.com/jeremy/FW_LED_System_Monitor.git) with NixOS packaging and robustness improvements.
-
-- Original upstream: MidnightJava/led-matrix  
-- NixOS integration: timoteuszelle/led-matrix
-
-Contributions welcome for:
-- Additional plugins
-- NixOS module improvements
-- Bug fixes and robustness improvements
-- Documentation updates
-
-## License
-
-MIT License (assuming - verify with original project)
-
-## Hardware Requirements
-
-- Framework 16 laptop
-- LED Matrix Input Module(s) installed
-- NixOS operating system
-
