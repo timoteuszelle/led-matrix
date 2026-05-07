@@ -89,20 +89,19 @@ def evcode_keyloop():
         try:
             device = evdev.InputDevice(kbd_path)
             for event in device.read_loop():
-                for event in device.read_loop():
-                    if event.type == ecodes.EV_KEY:
-                        if event.value == 1:
-                            keys_pressed.add(event.code)
-                        elif event.value == 0:
-                            keys_pressed.discard(event.code)
+                if event.type == ecodes.EV_KEY:
+                    if event.value == 1:
+                        keys_pressed.add(event.code)
+                    elif event.value == 0:
+                        keys_pressed.discard(event.code)
 
-                        if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_F in keys_pressed:
-                            freeze_app_switching = True
-                        elif (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_U in keys_pressed:
-                            freeze_app_switching = False
-                            
-                        if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_N in keys_pressed:
-                            evdev_next_key_pressed = True
+                    if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_F in keys_pressed:
+                        freeze_app_switching = True
+                    elif (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_U in keys_pressed:
+                        freeze_app_switching = False
+
+                    if (ecodes.KEY_LEFTALT in keys_pressed or ecodes.KEY_RIGHTALT in keys_pressed) and ecodes.KEY_N in keys_pressed:
+                        evdev_next_key_pressed = True
         except (PermissionError, FileNotFoundError, OSError) as e:
             log.warning(f"Warning: Cannot access keyboard device {kbd_path}: {e}")
                 

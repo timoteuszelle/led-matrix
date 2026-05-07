@@ -82,6 +82,7 @@ def scale_rms(rms, min_db=-60, max_db=0):
     db = 20 * np.log10(rms + 1e-10)
     normalized = np.clip((db - min_db) / (max_db - min_db), 0, 1)
     return int(normalized * 34)
+
 def clamp_positive_float(value, default):
     try:
         parsed = float(value)
@@ -95,6 +96,7 @@ def clamp_nonnegative_int(value, default):
         return parsed if parsed >= 0 else int(default)
     except (TypeError, ValueError):
         return int(default)
+
 def resolve_input_stream_device(input_mode, input_device_hint=None):
     if input_device_hint:
         return input_device_hint
@@ -286,10 +288,6 @@ class Equalizer():
         with self.buffer_lock:
             self.audio_buffer = indata.copy()
         
-    def draw_id(self, device_name):
-        grid = np.zeros((9,34), dtype = int)
-        grid[:,:] = id_patterns['equalizer_paused'] * shared_state.foreground_value
-        self.queue_frame(grid, False)
     def draw_inverted_silence_pulse(self, elapsed_sec, pulse_period_sec, reveal_sec):
         pulse_period_sec = clamp_positive_float(pulse_period_sec, DEFAULT_SILENT_PULSE_PERIOD_SEC)
         reveal_sec = clamp_positive_float(reveal_sec, DEFAULT_SILENT_PULSE_REVEAL_SEC)
@@ -428,6 +426,7 @@ class Equalizer():
                     pulse_period_sec=silent_pulse_period_sec,
                     reveal_sec=silent_pulse_reveal_sec,
                 )
+
             while not self.done:
                 with self.buffer_lock:
                     buffer_snapshot = self.audio_buffer.copy()
