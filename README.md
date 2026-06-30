@@ -160,7 +160,7 @@ For automated continuous execution, you can run as a systemd service instead:
 # The service runs as a user-level systemd service under the logged in user's account
 ./build_and_install.sh
 # manage the service
-systemctl --user start|stop|status fwledmatrix.service
+systemctl --user start|stop|status fwledmonitor.service
 # The service config file is at ~/.config/systemd/user/fwledmonitor.service.
 # The service executable is at /opt/led_mon/led_mon (sym-linked to /usr/local/bin/led_mon)
 ```
