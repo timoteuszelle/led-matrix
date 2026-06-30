@@ -263,7 +263,7 @@ def draw_to_LEDs(s, grid):
     send_command(s, Commands.FlushCols)
 
 
-def init_device(location = "1-3.2"):
+def init_device(location = "1-3.2", fatal=True):
     try:
         # VID = 1234
         # PID = 5678
@@ -272,10 +272,12 @@ def init_device(location = "1-3.2"):
             if device.location and device.location.startswith(location):
                 s = serial.Serial(device.device, 115200)
                 return s
-        log.error('Error getting comm ports for LED panel USB devices')
-        sys.exit(1)
+        raise RuntimeError(f"No LED panel device found for location prefix '{location}'")
     except Exception as e:
-        print(e)
+        if fatal:
+            log.error(f"Error getting comm ports for LED panel USB devices: {e}")
+            sys.exit(1)
+        raise
 
 
 class DrawingThread(threading.Thread):
@@ -286,9 +288,39 @@ class DrawingThread(threading.Thread):
         self.serial_port = init_device(self.port_location)
         self.input_queue = input_queue
         self.animate_active= False
+        self._reconnect_backoff_sec = 0.5
+        self._max_reconnect_backoff_sec = 8.0
+        self._next_reconnect_time = 0.0
 
     def set_animate(self, animate):
         do_animate(self.serial_port, animate=animate)
+
+    def _close_serial_port(self):
+        if self.serial_port is None:
+            return
+        try:
+            self.serial_port.close()
+        except Exception as e:
+            log.debug(f"Error closing serial port during reconnect: {e}")
+        finally:
+            self.serial_port = None
+
+    def _attempt_reconnect(self, force=False):
+        now = time.monotonic()
+        if not force and now < self._next_reconnect_time:
+            return False
+        try:
+            self.serial_port = init_device(self.port_location, fatal=False)
+            do_animate(self.serial_port, animate=self.animate_active)
+            self._reconnect_backoff_sec = 0.5
+            self._next_reconnect_time = 0.0
+            log.info(f"Reconnected LED panel at location {self.port_location}")
+            return True
+        except Exception as e:
+            self._next_reconnect_time = now + self._reconnect_backoff_sec
+            self._reconnect_backoff_sec = min(self._reconnect_backoff_sec * 2, self._max_reconnect_backoff_sec)
+            log.warning(f"Unable to reconnect LED panel at {self.port_location}: {e}")
+            return False
     
     def run(self):
         while True:
@@ -297,24 +329,27 @@ class DrawingThread(threading.Thread):
                 if item is None:  # Sentinel to exit cleanly
                     break
                 grid, animate = item
+
+                if animate is not None:
+                    self.animate_active = animate
+
+                if self.serial_port is None and not self._attempt_reconnect():
+                    continue
+
                 if not self.animate_active:
                     draw_to_LEDs(self.serial_port, grid)
                 if animate is not None:
-                    self.animate_active = animate
                     do_animate(self.serial_port, animate)
 
             except Exception as e:
                 log.error(f"Error in DrawingThread: {e}")
-                # del self.serial_port
+                self._close_serial_port()
+                self._attempt_reconnect(force=True)
                 time.sleep(1.0)
-                # self.serial_port = init_device(self.port_location)
                 continue
             
         # Clean shutdown
-        try:
-            self.serial_port.close()
-        except Exception as e:
-            log.error(f"Error closing serial port: {e}")
+        self._close_serial_port()
         log.debug("DrawingThread exited cleanly")
                 
 ###############################################################
