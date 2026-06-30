@@ -76,7 +76,7 @@ python -m led_mon.led_system_monitor
 
 ### For Fedora users:
 ```bash
-sudo yum install -y python3-numpy python3-psutil python3-pyserial python3-evdev python3-pynput python3-pyyaml python3-pip
+sudo dnf install -y python3-numpy python3-psutil python3-pyserial python3-evdev python3-pynput python3-pyyaml python3-pip
 cd led-matrix-monitoring\
 pyenv install 3.11 # or higher (tested up to 3.14)
 pyenv virtualenv 3.11 led-matrix-env
