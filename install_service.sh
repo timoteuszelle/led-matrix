@@ -2,7 +2,7 @@
 set -x
 dsp=${DISPLAY:-:0}
 xauthority=$XAUTHORITY
-wayland_display = ${WAYLAND_DISPLAY:-wayland-1}
+wayland_display=${WAYLAND_DISPLAY:-wayland-1}
 
 sudo rm -f /etc/systemd/system/fwledmonitor.service
 sudo tee $HOME/.config/systemd/user/fwledmonitor.service > /dev/null <<EOF
