@@ -44,7 +44,7 @@ The `build_and_install.sh` script will automatically detect your Linux distribut
   * Turn on animation and define command arguments for apps
   * Specified via a yaml config file
 * Keyboard shortcut `ALT` + `I` identifies apps running in each quadrant by displaying abbreviated name
-* Keyboard shortcut `ALT` + `N` forces the display of the nexzt widget, without waiting for the time slice to complete
+* Keyboard shortcut `ALT` + `N` forces the display of the next widget, without waiting for the time slice to complete
 * Keyboard shortcut `ALT` + `F` freezes app switching, cuasing the current widget to be displayed indefinitely
 * Keyboard shortcut `ALT` + `U` unfreezes app switching
 * Plugin framework supports simplified development of addiitonal LED Panel applications
