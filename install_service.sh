@@ -5,6 +5,7 @@ xauthority=$XAUTHORITY
 wayland_display=${WAYLAND_DISPLAY:-wayland-1}
 
 sudo rm -f /etc/systemd/system/fwledmonitor.service
+mkdir -p "$HOME/.config/systemd/user"
 sudo tee $HOME/.config/systemd/user/fwledmonitor.service > /dev/null <<EOF
 [Unit]
 Description=Framework 16 LED System Monitor
@@ -27,7 +28,18 @@ WantedBy=default.target
 EOF
 
 if ! id -u "led_mon" &>/dev/null 2>&1; then
-    sudo useradd   --system   --home /var/lib/led_mon  -G input,dialout --shell /usr/sbin/nologin   led_mon
+    groups_to_add=()
+    for group in input dialout; do
+        if getent group "$group" >/dev/null 2>&1; then
+            groups_to_add+=("$group")
+        fi
+    done
+
+    useradd_args=(--system --home /var/lib/led_mon --shell /usr/sbin/nologin)
+    if [[ ${#groups_to_add[@]} -gt 0 ]]; then
+        useradd_args+=( -G "$(IFS=,; echo "${groups_to_add[*]}")" )
+    fi
+    sudo useradd "${useradd_args[@]}" led_mon
 fi
 sudo mkdir -p /var/lib/led_mon/.config
 sudo chown led_mon:led_mon /var/lib/led_mon/.config
@@ -36,7 +48,13 @@ sudo chmod 777 /var/lib/led_mon/.config
 sudo mkdir -p /etc/led_mon
 sudo chown -R root /etc/led_mon
 # Copy .env-example to .env and set API Key env variables
-sudo cp .env /etc/led_mon/led_mon.env
+if [[ -f .env ]]; then
+    sudo cp .env /etc/led_mon/led_mon.env
+elif [[ -f .env-example ]]; then
+    sudo cp .env-example /etc/led_mon/led_mon.env
+else
+    sudo touch /etc/led_mon/led_mon.env
+fi
 # PyInsatller does not include config-local.yaml with --add-data because it may not exist
 if [[ -f led_mon/config-local.yaml ]];then
     cp led_mon/config-local.yaml ./dist/led_mon/_internal/led_mon/config-local.yaml
