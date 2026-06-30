@@ -30,7 +30,7 @@ if ! id -u "led_mon" &>/dev/null 2>&1; then
     sudo useradd   --system   --home /var/lib/led_mon  -G input,dialout --shell /usr/sbin/nologin   led_mon
 fi
 sudo mkdir -p /var/lib/led_mon/.config
-sudo chown led_mon:led_mon /var/ib/led_mon/.config
+sudo chown led_mon:led_mon /var/lib/led_mon/.config
 sudo chmod 777 /var/lib/led_mon/.config
 
 sudo mkdir -p /etc/led_mon
