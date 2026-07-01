@@ -224,7 +224,7 @@ groups $USER
 * To customize the coonfiguration:
   * The file `led_mon/config.yaml` contains the default configuration, along with comments explaining the format and meaning of config settings.
   * Make a copy of `config.yaml`, named `config-local.yaml`, in the `led_mon` directory, and make any desired changes. This file is git-ignored, so it will not be shared or overwritten.
-  * If `config-local.yaml` is present, it will be thhe active config, and `config.yaml` will be ignored.
+  * If `config-local.yaml` is present, it will be the active config, and `config.yaml` will be ignored.
   * When running as a service, both config files will be copied to `/opt/led_mon/_internal/`. Files in this directory will be completely overwritten for every installation, so you should maintain your local configuration in the project repo, not the application installation directory.
   * The `config.yaml` file may be updated when you run `git pull` in the repo. Check Pull Request comments for an explanation of what changed. Every effort will be made to avoid breaking changes, but they cannot be ruled out at this stage of dvelopment. When new widgets are added to the app, you'll need to manually copy the new widget config settings into your local config file if you have one.
 
