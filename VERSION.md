@@ -1,9 +1,9 @@
 # Version Information
 
 ## Current Version
-- **Version**: 2.1.2
-- **Branch**: pr/nixos-module-equalizer-hardening
-- **Date**: 2026-05-01
+- **Version**: 2.1.3
+- **Branch**: main
+- **Date**: 2026-10-22
 
 ## Usage with specific commit
 
@@ -17,6 +17,22 @@ led-matrix-monitoring = {
 ```
 
 ## Changelog
+### v2.1.3 (2026-10-22)
+- **Scheduler**
+  - Suppressed quadrants keep rotating without a forced dispose
+  - Alt+N no longer desynchronizes the scheduler when a panel-scope app is active
+- **Runtime robustness**
+  - Drawing thread reconnects after the serial link drops
+  - Removed an unused function and a redundant loop in the evdev key listener
+- **Service installer**
+  - Fixed `wayland_display` assignment syntax
+  - Fixed the `/var/lib/led_mon` ownership path
+  - Skip missing `input` and `dialout` groups, and create the user unit directory before install
+  - Fall back to `.env-example` or an empty env file when `.env` is absent
+- **Config and docs**
+  - Default weather `measures-duration` is 20 seconds
+  - Commented zip and lat/lon location placeholders in `config.yaml`
+  - README corrections, including the config path and the Kelvin typo
 ### v2.1.2 (2026-05-01)
 - **Equalizer stabilization and tuning**
   - Removed intermediate EQ0 silence behavior in favor of pulse-only idle flow
